@@ -8,15 +8,16 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import numpy as np
 from typing import Any
 
+import newton
 import warp as wp
 from newton.viewer import ViewerGL
 
 from .newton_visualizer_cfg import NewtonVisualizerCfg
 from .visualizer import Visualizer
-
 
 class NewtonViewerGL(ViewerGL):
     """Wrapper around Newton's ViewerGL with training/rendering pause controls.
@@ -33,6 +34,9 @@ class NewtonViewerGL(ViewerGL):
         self._metadata = metadata or {}
         self._fallback_draw_controls = False
         self._update_frequency = update_frequency
+        # Set by NewtonVisualizer from cfg after creation
+        self._font_scale: float = 1.0
+        self._panel_initial_width: int = 300
 
         try:
             self.register_ui_callback(self._render_training_controls, position="side")
@@ -91,6 +95,18 @@ class NewtonViewerGL(ViewerGL):
 
         super().on_key_press(symbol, modifiers)
 
+    def _should_show_shape(self, flags: int, is_static: bool) -> bool:
+        """Override so Show Collision checkbox strictly controls collider visibility.
+
+        Newton's default falls back to ShapeFlags.VISIBLE for colliders when show_collision
+        is False, so collision meshes can stay visible. Here we hide colliders when
+        show_collision is False regardless of VISIBLE flag.
+        """
+        is_collider = bool(flags & int(newton.ShapeFlags.COLLIDE_SHAPES))
+        if is_collider:
+            return self.show_collision
+        return super()._should_show_shape(flags, is_static)
+
     def _render_ui(self):
         if not self._fallback_draw_controls:
             return super()._render_ui()
@@ -121,13 +137,16 @@ class NewtonViewerGL(ViewerGL):
         # Use theme colors directly
         nav_highlight_color = self.ui.get_theme_color(imgui.Col_.nav_cursor, (1.0, 1.0, 1.0, 1.0))
 
-        # Position the window on the left side
+        # Position and size: apply config once per run so panel_initial_width always takes effect
         io = self.ui.io
-        imgui.set_next_window_pos(imgui.ImVec2(10, 10))
-        imgui.set_next_window_size(imgui.ImVec2(300, io.display_size[1] - 20))
+        imgui.set_next_window_pos(imgui.ImVec2(10, 10), imgui.Cond_.once.value)
+        imgui.set_next_window_size(
+            imgui.ImVec2(self._panel_initial_width, io.display_size[1] - 20),
+            imgui.Cond_.once.value,
+        )
 
-        # Main control panel window - use safe flag values
-        flags = imgui.WindowFlags_.no_resize.value
+        # Main control panel window - resizable so user can adjust panel size
+        flags = 0
 
         if imgui.begin(f"Newton Viewer v{nt.__version__}", flags=flags):
             imgui.separator()
@@ -173,6 +192,12 @@ class NewtonViewerGL(ViewerGL):
                     # Center of mass visualization
                     show_com = self.show_com
                     changed, self.show_com = imgui.checkbox("Show Center of Mass", show_com)
+
+                    # Collision mesh (convex hull) visualization
+                    show_collision = self.show_collision
+                    changed, self.show_collision = imgui.checkbox("Show Collision", show_collision)
+                    if imgui.is_item_hovered():
+                        imgui.set_tooltip("Show collision shapes (e.g. convex hulls) for collision-enabled bodies")
 
             # Rendering Options section
             imgui.set_next_item_open(True, imgui.Cond_.appearing)
@@ -314,6 +339,7 @@ class NewtonVisualizer(Visualizer):
         self._viewer.show_contacts = self.cfg.show_contacts
         self._viewer.show_springs = self.cfg.show_springs
         self._viewer.show_com = self.cfg.show_com
+        self._viewer.show_collision = self.cfg.show_collision
 
         # Configure rendering options
         self._viewer.renderer.draw_shadows = self.cfg.enable_shadows
@@ -324,6 +350,12 @@ class NewtonVisualizer(Visualizer):
         self._viewer.renderer.sky_upper = self.cfg.background_color
         self._viewer.renderer.sky_lower = self.cfg.ground_color
         self._viewer.renderer._light_color = self.cfg.light_color
+
+        # ImGui font scale and panel size (imgui_bundle uses style.font_scale_main)
+        self._viewer._font_scale = self.cfg.font_scale
+        self._viewer._panel_initial_width = self.cfg.panel_initial_width
+        if self._viewer.ui and self._viewer.ui.is_available:
+            self._viewer.ui.imgui.get_style().font_scale_main = self.cfg.font_scale
 
         self._is_initialized = True
 

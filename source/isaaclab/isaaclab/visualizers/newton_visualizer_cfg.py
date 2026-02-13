@@ -17,6 +17,10 @@ class NewtonVisualizerCfg(VisualizerCfg):
     Lightweight OpenGL-based visualizer with real-time 3D rendering, interactive
     camera controls, and debug visualization (contacts, joints, springs, COM).
 
+    Use ``font_scale`` to enlarge UI text and ``panel_initial_width`` for the left panel.
+    The left panel is resizable at runtime; layout is saved in ``imgui.ini`` (run directory),
+    section ``[Window][Newton Viewer v0.2.0]``.
+
     Requires: pyglet >= 2.1.6, imgui_bundle >= 1.92.0
     """
 
@@ -28,6 +32,12 @@ class NewtonVisualizerCfg(VisualizerCfg):
 
     window_height: int = 1080
     """Window height in pixels."""
+
+    font_scale: float = 3.0
+    """ImGui font scale factor (e.g. 1.2 = 20% larger). Applied to all UI text."""
+
+    panel_initial_width: int = 500
+    """Initial width of the left control panel in pixels. Applied once at startup each run; panel is resizable at runtime."""
 
     update_frequency: int = 1
     """Visualizer update frequency (updates every N frames). Lower = more responsive but slower training."""
@@ -43,6 +53,9 @@ class NewtonVisualizerCfg(VisualizerCfg):
 
     show_com: bool = False
     """Show center of mass visualization."""
+
+    show_collision: bool = False
+    """Show collision shapes (e.g. convex hulls) for collision-enabled bodies. Toggle in UI at runtime."""
 
     enable_shadows: bool = True
     """Enable shadow rendering."""

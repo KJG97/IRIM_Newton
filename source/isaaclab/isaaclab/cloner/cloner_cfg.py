@@ -82,3 +82,6 @@ class TemplateCloneCfg:
 
     clone_in_fabric: bool = False
     """Enable/disable cloning in fabric for PhysX replication. Default is False."""
+
+    physics_clone_fn_kwargs: dict | None = None
+    """Optional kwargs passed to :attr:`physics_clone_fn` when called (e.g. ``equality_constraints`` for Newton)."""

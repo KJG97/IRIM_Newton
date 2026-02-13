@@ -89,7 +89,6 @@ class MJWarpSolverCfg(NewtonSolverCfg):
     use_mujoco_contacts: bool = True
     """Whether to use MuJoCo's contact solver."""
 
-
 @configclass
 class XPBOSolverCfg(NewtonSolverCfg):
     """An implicit integrator using eXtended Position-Based Dynamics (XPBD) for rigid and soft body simulation.

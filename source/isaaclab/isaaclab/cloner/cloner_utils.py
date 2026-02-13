@@ -71,7 +71,8 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
             get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
             positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
             if cfg.clone_physics:
-                template_clone_cfg.physics_clone_fn(stage, *replicate_args, positions=positions)
+                clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
+                template_clone_cfg.physics_clone_fn(stage, *replicate_args, positions=positions, **clone_kwargs)
             if cfg.clone_usd:
                 # parse env_origins directly from clone_path
                 usd_replicate(stage, *replicate_args, positions=positions)
@@ -80,7 +81,8 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
             selected_src = [tpl.format(int(idx)) for tpl, idx in zip(dest_paths, proto_idx.tolist())]
             replicate_args = selected_src, dest_paths, world_indices, clone_masking
             if cfg.clone_physics:
-                template_clone_cfg.physics_clone_fn(stage, *replicate_args)
+                clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
+                template_clone_cfg.physics_clone_fn(stage, *replicate_args, **clone_kwargs)
             if cfg.clone_usd:
                 usd_replicate(stage, *replicate_args)
 
@@ -271,6 +273,19 @@ def physx_replicate(
     get_physx_replicator_interface().register_replicator(stage_id, attach_fn, attach_end_fn, rename_fn)
 
 
+def _newton_joint_index_by_name(builder, name: str) -> int:
+    """Return joint index in builder whose joint_key equals or ends with name. Returns -1 if not found."""
+    for i, key in enumerate(builder.joint_key):
+        if key == name:
+            return i
+        if key.endswith("/" + name):
+            return i
+        # Last path component (e.g. "env_0/Robot/Waist_Yaw_Joint" -> "Waist_Yaw_Joint")
+        if key.split("/")[-1] == name:
+            return i
+    return -1
+
+
 def newton_replicate(
     stage: Usd.Stage,
     sources: list[str],
@@ -281,8 +296,15 @@ def newton_replicate(
     quaternions: torch.Tensor | None = None,
     up_axis: str = "Z",
     simplify_meshes: bool = True,
+    equality_constraints: list[tuple[str, str, tuple[float, ...]]] | None = None,
 ):
-    """Replicate prims into a Newton ``ModelBuilder`` using a per-source mapping."""
+    """Replicate prims into a Newton ``ModelBuilder`` using a per-source mapping.
+
+    Args:
+        equality_constraints: Optional list of (mimic_joint_name, driver_joint_name, (c0,c1,c2,c3,c4))
+            for Newton joint equality: q_mimic = c0 + c1*q_driver + c2*q_driver^2 + ... .
+            Joint names are matched against builder.joint_key (exact or path suffix).
+    """
     from newton import ModelBuilder, solvers
 
     from isaaclab.sim._impl.newton_manager import NewtonManager
@@ -298,6 +320,11 @@ def newton_replicate(
     stage_info = builder.add_usd(stage, ignore_paths=["/World/envs"] + sources)
 
     # build a prototype for each source
+    # Note: Newton's add_usd() does not apply USD xform scale when loading mesh geometry (unlike
+    # Omniverse, which composes full transform including scale). Assets whose visuals use a
+    # parent scale (e.g. 0.001 for mm→m) will therefore appear at wrong scale in the Newton
+    # visualizer. add_usd has no scale/meters_per_unit argument; workarounds: bake scale into
+    # the USD mesh geometry, or fix the Newton USD importer to apply world scale to mesh vertices.
     protos: dict[str, ModelBuilder] = {}
     for src_path in sources:
         p = ModelBuilder(up_axis=up_axis)
@@ -305,6 +332,30 @@ def newton_replicate(
         p.add_usd(stage, root_path=src_path, load_visual_shapes=True)
         if simplify_meshes:
             p.approximate_meshes("convex_hull")
+        # Inject joint equality constraints (e.g. mimic joints) so SolverMuJoCo enforces them
+        if equality_constraints:
+            added = 0
+            for mimic_name, driver_name, polycoef in equality_constraints:
+                idx1 = _newton_joint_index_by_name(p, mimic_name)
+                idx2 = _newton_joint_index_by_name(p, driver_name)
+                if idx1 >= 0 and idx2 >= 0:
+                    p.add_equality_constraint_joint(
+                        joint1=idx1,
+                        joint2=idx2,
+                        polycoef=list(polycoef) if len(polycoef) >= 5 else list(polycoef) + [0.0] * (5 - len(polycoef)),
+                    )
+                    added += 1
+            if added == 0 and equality_constraints:
+                import logging
+
+                log = logging.getLogger("isaaclab.cloner")
+                log.warning(
+                    "newton_replicate: no joint equality constraints added (joint names may not match). "
+                    "joint_key sample: %s",
+                    list(getattr(p, "joint_key", []))[:10],
+                )
+        # Debugging: no_left vs Right_Arm mesh count (uncomment to inspect)
+        # print(f"[newton_replicate] {src_path} -> bodies={p.body_count}, shapes={p.shape_count}, body_key[:5]={getattr(p, 'body_key', [])[:5]}")
         protos[src_path] = p
 
     # add by world, then by active sources in that world (column-wise)

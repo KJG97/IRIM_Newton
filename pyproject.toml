@@ -87,6 +87,11 @@ reportMissingImports = "none"
 reportMissingModuleSource = "none" # -> most common: prettytable in mdp managers
 
 reportGeneralTypeIssues = "none"       # -> raises 218 errors (usage of literal MISSING in dataclasses)
+reportAssignmentType = "none"          # -> e.g. scene.articulations["robot"] = self.robot
+reportArgumentType = "none"
+reportAttributeIssue = "none"          # -> e.g. .replace() on configclass (added at runtime)
+reportCallIssue = "none"
+reportUnknownMemberType = "none"       # -> dynamic members (e.g. configclass.replace)
 reportOptionalMemberAccess = "warning" # -> raises 8 errors
 reportPrivateUsage = "warning"
 

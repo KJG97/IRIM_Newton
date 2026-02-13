@@ -130,6 +130,8 @@ class InteractiveScene:
             clone_in_fabric=self.cfg.clone_in_fabric,
             device=self.device,
         )
+        if getattr(self.cfg, "newton_replicate_kwargs", None):
+            self.cloner_cfg.physics_clone_fn_kwargs = self.cfg.newton_replicate_kwargs
 
         # create source prim
         self.stage.DefinePrim(self.env_prim_paths[0], "Xform")
@@ -178,7 +180,10 @@ class InteractiveScene:
 
             if not copy_from_source:
                 # skip physx cloning, this means physx will walk and parse the stage one by one faithfully
-                cloner.newton_replicate(self.stage, *replicate_args, positions=self._default_env_origins)
+                newton_kwargs = getattr(self.cfg, "newton_replicate_kwargs", None) or {}
+                cloner.newton_replicate(
+                    self.stage, *replicate_args, positions=self._default_env_origins, **newton_kwargs
+                )
             cloner.usd_replicate(self.stage, *replicate_args, positions=self._default_env_origins)
 
     def filter_collisions(self, global_prim_paths: list[str] | None = None):

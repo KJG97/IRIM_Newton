@@ -1,0 +1,19 @@
+# Minimal skrl PPO config for Isaac-Allex-Direct-v0 (zero_agent / debug only)
+
+seed: 42
+
+models:
+  separate: False
+  policy:
+    class: GaussianMixin
+    clip_actions: False
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: STATES
+        layers: [256, 128, 64]
+        activations: elu
+    output: ACTIONS

@@ -8,6 +8,7 @@
 ##
 
 from .allegro import *
+from .allex import *
 from .ant import *
 from .anymal import *
 from .cartpole import *

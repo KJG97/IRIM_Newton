@@ -123,3 +123,8 @@ class InteractiveSceneCfg:
         Cloning in fabric can only be enabled if physics replication is also enabled.
         If ``replicated_physics=False``, we will automatically default cloning in fabric to be False.
     """
+
+    newton_replicate_kwargs: dict | None = None
+    """Optional kwargs passed to :func:`~isaaclab.cloner.newton_replicate` when cloning (e.g. ``equality_constraints``
+    for joint mimic / polynomial equality). Used only in the direct clone path (single env source).
+    """
