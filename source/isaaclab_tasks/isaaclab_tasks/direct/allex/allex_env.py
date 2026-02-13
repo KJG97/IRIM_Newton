@@ -22,14 +22,6 @@ except ImportError:
 from .allex_env_cfg import ALLEX_MIMIC_SPEC, AllexEnvCfg
 
 
-def _poly(q: torch.Tensor, c0: float, c1: float, c2: float, c3: float, c4: float) -> torch.Tensor:
-    """q_mimic = c0 + c1*q + c2*q^2 + c3*q^3 + c4*q^4 (broadcast over envs)."""
-    q2 = q * q
-    q3 = q2 * q
-    q4 = q3 * q
-    return c0 + c1 * q + c2 * q2 + c3 * q3 + c4 * q4
-
-
 class AllexEnv(DirectRLEnv):
     """Minimal environment: spawn ALLEX on a plane, apply actions as joint position offsets."""
 
@@ -68,12 +60,21 @@ class AllexEnv(DirectRLEnv):
         target = current + scale * self.actions
         use_engine_equality = getattr(self.cfg, "use_newton_equality_for_mimic", False)
         if use_engine_equality and self._mimic_overrides:
-            # Newton joint equality constraints enforce mimic = poly(driver). Set target only for drivers.
-            mimic_ids_set = {mimic_i for (mimic_i, _, _) in self._mimic_overrides}
-            driver_positions = [j for j in range(len(self._joint_dof_idx)) if self._joint_dof_idx[j] not in mimic_ids_set]
+            # MuJoCo equality only: set target for driver joints only. Mimic joints are enforced
+            # by the solver (equality constraint) in each substep; no _poly here.
+            mimic_positions = {mimic_i for (mimic_i, _, _) in self._mimic_overrides}
+            driver_positions = [j for j in range(len(self._joint_dof_idx)) if j not in mimic_positions]
             driver_joint_ids = [self._joint_dof_idx[j] for j in driver_positions]
             target_driver = target[:, driver_positions]
             self.robot.set_joint_position_target(target_driver, joint_ids=driver_joint_ids)
+        else:
+            num_joints = self.robot.num_joints
+            full_target = torch.zeros(
+                self.num_envs, num_joints, device=target.device, dtype=target.dtype
+            )
+            full_target[:, self._joint_dof_idx] = target
+            self.robot.set_joint_position_target(full_target)
+
 
     def _get_observations(self) -> dict:
         self._ensure_joint_dof_idx()

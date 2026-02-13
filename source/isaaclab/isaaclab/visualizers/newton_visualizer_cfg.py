@@ -36,7 +36,7 @@ class NewtonVisualizerCfg(VisualizerCfg):
     font_scale: float = 3.0
     """ImGui font scale factor (e.g. 1.2 = 20% larger). Applied to all UI text."""
 
-    panel_initial_width: int = 500
+    panel_initial_width: int = 600
     """Initial width of the left control panel in pixels. Applied once at startup each run; panel is resizable at runtime."""
 
     update_frequency: int = 1

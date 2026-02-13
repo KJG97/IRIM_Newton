@@ -267,7 +267,7 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
             max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False,
+            enabled_self_collisions=True,
             solver_position_iteration_count=8,
             solver_velocity_iteration_count=0,
         ),
@@ -306,7 +306,7 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
             "R_Little_PIP_Joint": 0.0,
             "R_Little_DIP_Joint": 0.0,
         },
-        pos=(0.0, 0.0, 0.0),
+        pos=(0.0, 0.0, 1.0),
         rot=(0.0, 0.0, 0.0, 1.0),
     ),
     actuators={
@@ -343,8 +343,7 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
             stiffness=100.0,
             damping=10.0,
         ),
-        # Mimic joints: env에서 poly(driver) target 설정. 높은 stiffness/damping으로 구속처럼 추종.
-        # MJCF equality joint1 = Waist_Pitch_Upper, Waist_Pitch_Dummy, R_Thumb_IP, R_*_DIP.
+        # Mimic joints: MuJoCo equality가 자세 강제. 액추에이터는 damping만 두어 constraint와 견제하지 않음.
         "mimic": ImplicitActuatorCfg(
             joint_names_expr=[
                 "Waist_Pitch_Dummy_Joint",
@@ -357,8 +356,8 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
             ],
             effort_limit_sim=1000.0,
             velocity_limit_sim=10.0,
-            stiffness=1000.0,
-            damping=100.0,
+            stiffness=0.0,  # position target 없음; equality가 강제. damping만 사용.
+            damping=1.0,
         ),
     },
     soft_joint_pos_limit_factor=1.0,
