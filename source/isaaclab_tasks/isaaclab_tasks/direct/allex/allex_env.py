@@ -68,12 +68,7 @@ class AllexEnv(DirectRLEnv):
             target_driver = target[:, driver_positions]
             self.robot.set_joint_position_target(target_driver, joint_ids=driver_joint_ids)
         else:
-            num_joints = self.robot.num_joints
-            full_target = torch.zeros(
-                self.num_envs, num_joints, device=target.device, dtype=target.dtype
-            )
-            full_target[:, self._joint_dof_idx] = target
-            self.robot.set_joint_position_target(full_target)
+            print("use_engine_equality not")
 
 
     def _get_observations(self) -> dict:

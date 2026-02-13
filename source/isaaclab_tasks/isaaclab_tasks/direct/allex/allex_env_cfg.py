@@ -103,8 +103,9 @@ class AllexEnvNoLeftCfg(DirectRLEnvCfg):
     solver_cfg = ALLEX_SOLVER_CFG
     newton_cfg = NewtonCfg(
         solver_cfg=solver_cfg,
-        num_substeps=2,
+        num_substeps=4,
         debug_mode=False,
+        use_cuda_graph=True,  # True면 [solver.substep] print는 캡처 시 1회만 찍힘. 매 스텝 찍으려면 False (성능 저하)
     )
 
     sim: SimulationCfg = SimulationCfg(
