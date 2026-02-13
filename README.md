@@ -1,115 +1,107 @@
-![Isaac Lab](docs/source/_static/isaaclab.jpg)
+<div align="center">
+
+# Isaac Lab (Newton + ALLEX)
+
+**Isaac Lab Newton 물리 엔진 기반 ALLEX 휴머노이드 Direct RL 환경 및 Joint Slider 제어**
+
+[Overview](#-overview) •
+[프로젝트 구조](#-프로젝트-구조-변경된-부분만) •
+[변경 내용](#-변경-내용-요약) •
+[실행 예시](#-실행-예시)
+
+</div>
 
 ---
 
-# Isaac Lab
+## 📖 Overview
 
-[![IsaacSim](https://img.shields.io/badge/IsaacSim-5.1.0-silver.svg)](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html)
-[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://docs.python.org/3/whatsnew/3.11.html)
-[![Linux platform](https://img.shields.io/badge/platform-linux--64-orange.svg)](https://releases.ubuntu.com/22.04/)
-[![Windows platform](https://img.shields.io/badge/platform-windows--64-orange.svg)](https://www.microsoft.com/en-us/)
-[![pre-commit](https://img.shields.io/github/actions/workflow/status/isaac-sim/IsaacLab/pre-commit.yaml?logo=pre-commit&logoColor=white&label=pre-commit&color=brightgreen)](https://github.com/isaac-sim/IsaacLab/actions/workflows/pre-commit.yaml)
-[![docs status](https://img.shields.io/github/actions/workflow/status/isaac-sim/IsaacLab/docs.yaml?label=docs&color=brightgreen)](https://github.com/isaac-sim/IsaacLab/actions/workflows/docs.yaml)
-[![License](https://img.shields.io/badge/license-BSD--3-yellow.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![License](https://img.shields.io/badge/license-Apache--2.0-yellow.svg)](https://opensource.org/license/apache-2-0)
+이 저장소는 **Isaac Lab**의 **Newton 물리 엔진** 브랜치를 기반으로, **ALLEX 휴머노이드**용 커스텀 환경과 도구를 추가·수정한 포크입니다.
 
-This branch of Isaac Lab is an experimental feature branch that provides an initial integration with the Newton Physics Engine, and is under active development.
-Many features are not yet supported, and only a limited set of classic RL and flat terrain locomotion reinforcement learning examples are included at the moment.
+### 핵심 변경 사항
 
-Documentation for this branch can be found [here](https://isaac-sim.github.io/IsaacLab/main/source/experimental-features/newton-physics-integration/index.html).
+- **Direct RL 환경 (ALLEX)**  
+  Newton joint equality로 mimic 관절 구속, driver 관절만 액션으로 제어
+- **Joint Slider Agent**  
+  PySide GUI로 Active(driver) 관절을 degree 슬라이더로 제어, 시뮬과 같은 프로세스에서 연동
+- **Mimic 구속**  
+  `equality_constraints`로 MuJoCo joint equality 주입, 액추에이터는 damping만 사용
 
-**Isaac Lab** is a GPU-accelerated, open-source framework designed to unify and simplify robotics research workflows, such as reinforcement learning, imitation learning, and motion planning. Built on [NVIDIA Isaac Sim](https://docs.isaacsim.omniverse.nvidia.com/latest/index.html), it combines fast and accurate physics and sensor simulation, making it an ideal choice for sim-to-real transfer in robotics.
+---
 
-Isaac Lab provides developers with a range of essential features for accurate sensor simulation, such as RTX-based cameras, LIDAR, or contact sensors. The framework's GPU acceleration enables users to run complex simulations and computations faster, which is key for iterative processes like reinforcement learning and data-intensive tasks. Moreover, Isaac Lab can run locally or be distributed across the cloud, offering flexibility for large-scale deployments.
+## 📁 프로젝트 구조 (변경된 부분만)
 
-
-## Key Features
-
-Isaac Lab offers a comprehensive set of tools and environments designed to facilitate robot learning:
-- **Robots**: A diverse collection of robots, from manipulators, quadrupeds, to humanoids, with 16 commonly available models.
-- **Environments**: Ready-to-train implementations of more than 30 environments, which can be trained with popular reinforcement learning frameworks such as RSL RL, SKRL, RL Games, or Stable Baselines. We also support multi-agent reinforcement learning.
-- **Physics**: Rigid bodies, articulated systems, deformable objects
-- **Sensors**: RGB/depth/segmentation cameras, camera annotations, IMU, contact sensors, ray casters.
-
-
-## Isaac Sim Version Dependency
-
-Isaac Lab is built on top of Isaac Sim and requires specific versions of Isaac Sim that are compatible with each release of Isaac Lab.
-Below, we outline the recent Isaac Lab releases and GitHub branches and their corresponding dependency versions for Isaac Sim.
-
-| Isaac Lab Version             | Isaac Sim Version             |
-| ----------------------------- | ----------------------------- |
-| `main` branch                 | Isaac Sim 4.5 / Isaac Sim 5.0 |
-| `v2.2.0`                      | Isaac Sim 4.5 / Isaac Sim 5.0 |
-| `v2.1.0`                      | Isaac Sim 4.5                 |
-| `v2.0.2`                      | Isaac Sim 4.5                 |
-| `v2.0.1`                      | Isaac Sim 4.5                 |
-| `v2.0.0`                      | Isaac Sim 4.5                 |
-| `feature/newton` branch       | Isaac Sim 5.0                 |
-
-Note that the `feature/newton` branch will contain active updates and may contain some breaking changes
-until the official Isaac Lab 3.0 release.
-
-
-## Contributing to Isaac Lab
-
-We wholeheartedly welcome contributions from the community to make this framework mature and useful for everyone.
-These may happen as bug reports, feature requests, or code contributions. For details, please check our
-[contribution guidelines](https://isaac-sim.github.io/IsaacLab/main/source/refs/contributing.html).
-
-## Show & Tell: Share Your Inspiration
-
-We encourage you to utilize our [Show & Tell](https://github.com/isaac-sim/IsaacLab/discussions/categories/show-and-tell) area in the
-`Discussions` section of this repository. This space is designed for you to:
-
-* Share the tutorials you've created
-* Showcase your learning content
-* Present exciting projects you've developed
-
-By sharing your work, you'll inspire others and contribute to the collective knowledge
-of our community. Your contributions can spark new ideas and collaborations, fostering
-innovation in robotics and simulation.
-
-## Troubleshooting
-
-Please see the [troubleshooting](https://isaac-sim.github.io/IsaacLab/main/source/refs/troubleshooting.html) section for
-common fixes or [submit an issue](https://github.com/isaac-sim/IsaacLab/issues).
-
-For issues related to Isaac Sim, we recommend checking its [documentation](https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/overview.html)
-or opening a question on its [forums](https://forums.developer.nvidia.com/c/agx-autonomous-machines/isaac/67).
-
-## Support
-
-* Please use GitHub [Discussions](https://github.com/isaac-sim/IsaacLab/discussions) for discussing ideas, asking questions, and requests for new features.
-* Github [Issues](https://github.com/isaac-sim/IsaacLab/issues) should only be used to track executable pieces of work with a definite scope and a clear deliverable. These can be fixing bugs, documentation issues, new features, or general updates.
-
-## Connect with the NVIDIA Omniverse Community
-
-Do you have a project or resource you'd like to share more widely? We'd love to hear from you!
-Reach out to the NVIDIA Omniverse Community team at OmniverseCommunity@nvidia.com to explore opportunities
-to spotlight your work.
-
-You can also join the conversation on the [Omniverse Discord](https://discord.com/invite/nvidiaomniverse) to
-connect with other developers, share your projects, and help grow a vibrant, collaborative ecosystem
-where creativity and technology intersect. Your contributions can make a meaningful impact on the Isaac Lab community and beyond!
-
-## License
-
-The Isaac Lab framework is released under [BSD-3 License](LICENSE). The `isaaclab_mimic` extension and its corresponding standalone scripts are released under [Apache 2.0](LICENSE-mimic). The license files of its dependencies and assets are present in the [`docs/licenses`](docs/licenses) directory.
-
-## Acknowledgement
-
-Isaac Lab development initiated from the [Orbit](https://isaac-orbit.github.io/) framework. We would appreciate if you would cite it in academic publications as well:
+아래는 **이 포크에서 추가·수정한 경로만** 나열한 트리입니다.
 
 ```
-@article{mittal2023orbit,
-   author={Mittal, Mayank and Yu, Calvin and Yu, Qinxi and Liu, Jingzhou and Rudin, Nikita and Hoeller, David and Yuan, Jia Lin and Singh, Ritvik and Guo, Yunrong and Mazhar, Hammad and Mandlekar, Ajay and Babich, Buck and State, Gavriel and Hutter, Marco and Garg, Animesh},
-   journal={IEEE Robotics and Automation Letters},
-   title={Orbit: A Unified Simulation Framework for Interactive Robot Learning Environments},
-   year={2023},
-   volume={8},
-   number={6},
-   pages={3740-3747},
-   doi={10.1109/LRA.2023.3270034}
-}
+IsaacLab/
+├── dvcc/
+│   ├── 101_UTILS_Refactoring.md
+│   ├── 102_UTILS_Commit_Push.md
+│   └── 200_DEV_NewtonJointSlider.md
+│
+├── scripts/
+│   └── environments/
+│       └── joint_slider_agent.py
+│
+└── source/
+    ├── isaaclab/
+    │   └── isaaclab/
+    │       ├── cloner/
+    │       │   └── cloner_utils.py
+    │       ├── scene/
+    │       │   └── interactive_scene_cfg.py
+    │       └── sim/
+    │           └── _impl/
+    │               ├── newton_manager.py
+    │               └── newton_manager_cfg.py
+    │
+    ├── isaaclab_assets/
+    │   ├── isaaclab_assets/
+    │   │   └── robots/
+    │   │       └── allex.py
+    │   └── allex_usd/
+    │       ├── ALLEX_newton.usd
+    │       ├── ALLEX_newton_no_left.usd
+    │       └── allex_model_mjcf_250903/
+    │           └── allex_contact_sensor.xml
+    │
+    └── isaaclab_tasks/
+        └── isaaclab_tasks/
+            └── direct/
+                └── allex/
+                    ├── allex_env.py
+                    └── allex_env_cfg.py
 ```
+
+---
+
+## 📋 변경 내용 요약
+
+| 경로 | 역할 |
+|------|------|
+| **dvcc/** | 개발·운영 유틸 문서 (리팩터링, 커밋 규칙, Newton Joint Slider 기획) |
+| **scripts/environments/joint_slider_agent.py** | PySide GUI로 Active(driver) 관절만 degree 슬라이더 제어. mimic는 equality 구속, 같은 프로세스에서 `env.step(actions)` 연동 |
+| **isaaclab/cloner/cloner_utils.py** | `newton_replicate(..., equality_constraints=...)` 로 mimic joint용 MuJoCo joint equality 주입 |
+| **isaaclab/scene/interactive_scene_cfg.py** | 클론 시 `newton_replicate_kwargs`(예: `equality_constraints`) 전달 지원 |
+| **isaaclab/sim/_impl/newton_manager.py, _cfg** | Newton 시뮬레이션 스텝·substep·CUDA Graph 설정 |
+| **isaaclab_assets/robots/allex.py** | ALLEX / ALLEX_NO_LEFT articulation 설정. mimic 구간 `ImplicitActuatorCfg` (stiffness=0, damping만) |
+| **isaaclab_assets/allex_usd/** | ALLEX Newton용 USD·MJCF (equality 정의: `allex_contact_sensor.xml`) |
+| **isaaclab_tasks/direct/allex/** | Direct RL env: `_apply_action`에서 driver만 target 설정, mimic는 Newton equality에 위임 (`use_newton_equality_for_mimic`) |
+
+---
+
+## 🚀 실행 예시
+
+### Joint Slider (ALLEX No-Left)
+
+```bash
+./isaaclab.sh -p scripts/environments/joint_slider_agent.py --task Isaac-Allex-Direct-NoLeft-v0 --visualizer newton
+```
+
+- Active(driver) 관절만 슬라이더로 표시되며, mimic 관절은 equality로 자동 구속됩니다.
+
+---
+
+## 📚 References
+
+- [Isaac Lab – Newton Physics Integration](https://isaac-sim.github.io/IsaacLab/main/source/experimental-features/newton-physics-integration/index.html)
