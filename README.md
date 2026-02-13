@@ -5,6 +5,7 @@
 **Isaac Lab Newton 물리 엔진 기반 ALLEX 휴머노이드 Direct RL 환경 및 Joint Slider 제어**
 
 [Overview](#-overview) •
+[설치](#-설치-재현-환경) •
 [프로젝트 구조](#-프로젝트-구조-변경된-부분만) •
 [변경 내용](#-변경-내용-요약) •
 [실행 예시](#-실행-예시)
@@ -25,6 +26,38 @@
   PySide GUI로 Active(driver) 관절을 degree 슬라이더로 제어, 시뮬과 같은 프로세스에서 연동
 - **Mimic 구속**  
   `equality_constraints`로 MuJoCo joint equality 주입, 액추에이터는 damping만 사용
+
+---
+
+## 🔧 설치 (재현 환경)
+
+다른 환경에서 이 저장소를 clone 후 동일하게 실행하려면 아래 순서대로 진행하면 됩니다.
+
+### 1. Isaac Sim 패키지 설치
+
+```bash
+pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com
+```
+
+### 2. 빌드 의존성 (Linux)
+
+일부 의존성(예: robomimic 관련)은 Windows에서 제공되지 않으며, Linux에서는 다음이 필요합니다.
+
+```bash
+sudo apt install cmake build-essential
+```
+
+### 3. Isaac Lab 설치
+
+저장소 루트에서 다음 중 하나를 실행합니다.
+
+```bash
+./isaaclab.sh --install
+# 또는
+./isaaclab.sh -i
+```
+
+이후 [실행 예시](#-실행-예시)의 명령으로 Joint Slider 등을 실행할 수 있습니다.
 
 ---
 
