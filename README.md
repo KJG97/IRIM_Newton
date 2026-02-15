@@ -2,13 +2,13 @@
 
 # Isaac Lab (Newton + ALLEX)
 
-**Isaac Lab Newton 물리 엔진 기반 ALLEX 휴머노이드 Direct RL 환경 및 Joint Slider 제어**
+**Isaac Lab with Newton physics: ALLEX humanoid direct RL environments and joint slider control**
 
 [Overview](#-overview) •
-[설치](#-설치-재현-환경) •
-[프로젝트 구조](#-프로젝트-구조-변경된-부분만) •
-[변경 내용](#-변경-내용-요약) •
-[실행 예시](#-실행-예시)
+[Installation](#-installation) •
+[Project structure](#-project-structure) •
+[Changes summary](#-changes-summary) •
+[Run](#-run)
 
 </div>
 
@@ -16,62 +16,57 @@
 
 ## 📖 Overview
 
-이 저장소는 **Isaac Lab**의 **Newton 물리 엔진** 브랜치를 기반으로, **ALLEX 휴머노이드**용 커스텀 환경과 도구를 추가·수정한 포크입니다.
+This repository is a fork of **Isaac Lab**’s **Newton physics** branch, extended with custom environments and assets for the **ALLEX humanoid** robot.
 
-### 핵심 변경 사항
+### Main changes
 
-- **Direct RL 환경 (ALLEX)**  
-  Newton joint equality로 mimic 관절 구속, driver 관절만 액션으로 제어
+- **Direct RL environments (ALLEX)**  
+  Two variants: **full body** (60 DOF, `allex_test.usd`) and **No-Left** (31 DOF, `ALLEX_newton_no_left.usd`). Mimic joints are constrained via Newton/MuJoCo joint equality; only driver joints receive actions.
 - **Joint Slider Agent**  
-  PySide GUI로 Active(driver) 관절을 degree 슬라이더로 제어, 시뮬과 같은 프로세스에서 연동
-- **Mimic 구속**  
-  `equality_constraints`로 MuJoCo joint equality 주입, 액추에이터는 damping만 사용
+  PySide GUI to control active (driver) joints with degree sliders in the same process as the simulation. Works for both full and No-Left; driver vs mimic is determined by the env config `mimic_spec`.
+- **Mimic constraints**  
+  `equality_constraints` are passed into `newton_replicate(...)` and injected as MuJoCo joint equality. Mimic actuators use stiffness=0 and damping only.
+- **Newton/MuJoCo integration**  
+  Dense Jacobian patch for nv>32 to avoid sparse Jacobian issues; increased `mj_data_memory` and `nconmax` for the full-body model.
 
 ---
 
-## 🔧 설치 (재현 환경)
+## 🔧 Installation
 
-다른 환경에서 이 저장소를 clone 후 동일하게 실행하려면 아래 순서대로 진행하면 됩니다.
+To reproduce the environment:
 
-### 1. Isaac Sim 패키지 설치
+### 1. Isaac Sim
 
 ```bash
 pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.nvidia.com
 ```
 
-### 2. 빌드 의존성 (Linux)
-
-일부 의존성(예: robomimic 관련)은 Windows에서 제공되지 않으며, Linux에서는 다음이 필요합니다.
+### 2. Build dependencies (Linux)
 
 ```bash
 sudo apt install cmake build-essential
 ```
 
-### 3. Isaac Lab 설치
+### 3. Isaac Lab
 
-저장소 루트에서 다음 중 하나를 실행합니다.
+From the repository root:
 
 ```bash
 ./isaaclab.sh --install
-# 또는
+# or
 ./isaaclab.sh -i
 ```
 
-이후 [실행 예시](#-실행-예시)의 명령으로 Joint Slider 등을 실행할 수 있습니다.
+Then use the [Run](#-run) commands below.
 
 ---
 
-## 📁 프로젝트 구조 (변경된 부분만)
+## 📁 Project structure
 
-아래는 **이 포크에서 추가·수정한 경로만** 나열한 트리입니다.
+Only paths that were added or modified in this fork are listed.
 
 ```
 IsaacLab/
-├── dvcc/
-│   ├── 101_UTILS_Refactoring.md
-│   ├── 102_UTILS_Commit_Push.md
-│   └── 200_DEV_NewtonJointSlider.md
-│
 ├── scripts/
 │   └── environments/
 │       └── joint_slider_agent.py
@@ -86,15 +81,16 @@ IsaacLab/
     │       └── sim/
     │           └── _impl/
     │               ├── newton_manager.py
-    │               └── newton_manager_cfg.py
+    │               ├── newton_manager_cfg.py
+    │               └── solvers_cfg.py
     │
     ├── isaaclab_assets/
     │   ├── isaaclab_assets/
     │   │   └── robots/
     │   │       └── allex.py
     │   └── allex_usd/
-    │       ├── ALLEX_newton.usd
-    │       ├── ALLEX_newton_no_left.usd
+    │       ├── allex_test.usd           # Full ALLEX (60 DOF)
+    │       ├── ALLEX_newton_no_left.usd # No-Left (31 DOF)
     │       └── allex_model_mjcf_250903/
     │           └── allex_contact_sensor.xml
     │
@@ -108,30 +104,37 @@ IsaacLab/
 
 ---
 
-## 📋 변경 내용 요약
+## 📋 Changes summary
 
-| 경로 | 역할 |
+| Path | Role |
 |------|------|
-| **dvcc/** | 개발·운영 유틸 문서 (리팩터링, 커밋 규칙, Newton Joint Slider 기획) |
-| **scripts/environments/joint_slider_agent.py** | PySide GUI로 Active(driver) 관절만 degree 슬라이더 제어. mimic는 equality 구속, 같은 프로세스에서 `env.step(actions)` 연동 |
-| **isaaclab/cloner/cloner_utils.py** | `newton_replicate(..., equality_constraints=...)` 로 mimic joint용 MuJoCo joint equality 주입 |
-| **isaaclab/scene/interactive_scene_cfg.py** | 클론 시 `newton_replicate_kwargs`(예: `equality_constraints`) 전달 지원 |
-| **isaaclab/sim/_impl/newton_manager.py, _cfg** | Newton 시뮬레이션 스텝·substep·CUDA Graph 설정 |
-| **isaaclab_assets/robots/allex.py** | ALLEX / ALLEX_NO_LEFT articulation 설정. mimic 구간 `ImplicitActuatorCfg` (stiffness=0, damping만) |
-| **isaaclab_assets/allex_usd/** | ALLEX Newton용 USD·MJCF (equality 정의: `allex_contact_sensor.xml`) |
-| **isaaclab_tasks/direct/allex/** | Direct RL env: `_apply_action`에서 driver만 target 설정, mimic는 Newton equality에 위임 (`use_newton_equality_for_mimic`) |
+| **scripts/environments/joint_slider_agent.py** | PySide GUI: degree sliders for active (driver) joints only. Uses cfg `mimic_spec` for both full and No-Left; drives `env.step(actions)` in the same process. |
+| **isaaclab/cloner/cloner_utils.py** | `newton_replicate(..., equality_constraints=...)` to inject MuJoCo joint equality for mimic joints. |
+| **isaaclab/scene/interactive_scene_cfg.py** | Passes `newton_replicate_kwargs` (e.g. `equality_constraints`) into the cloner when replicating. |
+| **isaaclab/sim/_impl/newton_manager.py, solvers_cfg.py** | Newton: dense Jacobian patch (nv>32), `mj_data_memory` and solver config; substeps and CUDA Graph options. |
+| **isaaclab_assets/robots/allex.py** | ALLEX_CFG (allex_test.usd, 60 DOF) and ALLEX_NO_LEFT_CFG. Mimic actuators: stiffness=0, damping only. |
+| **isaaclab_assets/allex_usd/** | Full-body and No-Left USD assets; MJCF equality definitions in `allex_contact_sensor.xml`. |
+| **isaaclab_tasks/direct/allex/** | Direct RL env: sets position targets only for driver joints (from cfg `mimic_spec`); mimic motion is enforced by Newton equality. |
 
 ---
 
-## 🚀 실행 예시
+## 🚀 Run
 
-### Joint Slider (ALLEX No-Left)
+### Joint Slider
+
+**Full ALLEX (60 DOF)**
+
+```bash
+./isaaclab.sh -p scripts/environments/joint_slider_agent.py --task Isaac-Allex-Direct-v0 --visualizer newton
+```
+
+**No-Left (31 DOF, right arm and hand only)**
 
 ```bash
 ./isaaclab.sh -p scripts/environments/joint_slider_agent.py --task Isaac-Allex-Direct-NoLeft-v0 --visualizer newton
 ```
 
-- Active(driver) 관절만 슬라이더로 표시되며, mimic 관절은 equality로 자동 구속됩니다.
+In both tasks, only active (driver) joints appear as sliders; mimic joints follow via equality constraints.
 
 ---
 
