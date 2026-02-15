@@ -89,6 +89,10 @@ class MJWarpSolverCfg(NewtonSolverCfg):
     use_mujoco_contacts: bool = True
     """Whether to use MuJoCo's contact solver."""
 
+    mj_data_memory: int | None = None
+    """Bytes for MuJoCo mjData arena+stack (mjSpec.memory). If None, MuJoCo default is used.
+    Increase this (e.g. 16*1024*1024) when you see mj_stackAlloc stack overflow with large contact/constraint counts."""
+
 @configclass
 class XPBOSolverCfg(NewtonSolverCfg):
     """An implicit integrator using eXtended Position-Based Dynamics (XPBD) for rigid and soft body simulation.

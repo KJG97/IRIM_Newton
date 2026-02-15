@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import threading
 import numpy as np
 import re
 
@@ -18,6 +19,46 @@ from newton.solvers import SolverBase, SolverFeatherstone, SolverMuJoCo, SolverN
 from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
 from isaaclab.sim.utils.stage import get_current_stage
 from isaaclab.utils.timer import Timer
+
+# Newton이 spec.option.jacobian = mjJAC_AUTO 로 빌드하면 nv>32일 때 sparse가 되어
+# mujoco_warp put_data에서 mjd.flexedge_J_rownnz 등 미지원 속성 참조로 오류 발생.
+# 모델을 처음부터 dense로 빌드하도록 mjJAC_AUTO를 mjJAC_DENSE로 취급하게 패치.
+def _apply_newton_dense_jacobian_patch() -> None:
+    try:
+        import mujoco
+        if getattr(mujoco.mjtJacobian, "_isaaclab_dense_patch_applied", False):
+            return
+        try:
+            mujoco.mjtJacobian.mjJAC_AUTO = mujoco.mjtJacobian.mjJAC_DENSE
+        except (AttributeError, TypeError):
+            mujoco.mjtJacobian.__dict__["mjJAC_AUTO"] = mujoco.mjtJacobian.mjJAC_DENSE
+        mujoco.mjtJacobian._isaaclab_dense_patch_applied = True
+    except Exception:
+        pass
+
+
+_apply_newton_dense_jacobian_patch()
+
+# MuJoCo mjData arena+stack size (mjSpec.memory). Set before SolverMuJoCo builds the spec to avoid mj_stackAlloc overflow.
+_mj_spec_memory_requested = threading.local()
+
+
+def _apply_mj_spec_memory_patch(memory_bytes: int) -> None:
+    """Patch mujoco.MjSpec.compile so the next compile() uses spec.memory = memory_bytes (avoids mj_stackAlloc overflow)."""
+    import mujoco
+    _mj_spec_memory_requested.value = memory_bytes
+    if getattr(mujoco.MjSpec, "_isaaclab_memory_patch_applied", False):
+        return
+    _orig_compile = mujoco.MjSpec.compile
+
+    def _patched_compile(self):
+        if getattr(_mj_spec_memory_requested, "value", None) is not None:
+            self.memory = _mj_spec_memory_requested.value
+            _mj_spec_memory_requested.value = None
+        return _orig_compile(self)
+
+    mujoco.MjSpec.compile = _patched_compile
+    mujoco.MjSpec._isaaclab_memory_patch_applied = True
 
 
 def flipped_match(x: str, y: str) -> re.Match | None:
@@ -189,6 +230,7 @@ class NewtonManager:
             NewtonManager._num_substeps = NewtonManager._cfg.num_substeps
             NewtonManager._solver_dt = NewtonManager._dt / NewtonManager._num_substeps
             print(NewtonManager._model.gravity)
+            _apply_newton_dense_jacobian_patch()
             NewtonManager._solver = NewtonManager._get_solver(NewtonManager._model, NewtonManager._cfg.solver_cfg)
             if isinstance(NewtonManager._solver, SolverMuJoCo):
                 NewtonManager._needs_collision_pipeline = not NewtonManager._cfg.solver_cfg.get(
@@ -358,8 +400,11 @@ class NewtonManager:
     @classmethod
     def _get_solver(cls, model: Model, solver_cfg: dict) -> SolverBase:
         NewtonManager._solver_type = solver_cfg.pop("solver_type")
+        mj_data_memory = solver_cfg.pop("mj_data_memory", None)
 
         if NewtonManager._solver_type == "mujoco_warp":
+            if mj_data_memory is not None:
+                _apply_mj_spec_memory_patch(mj_data_memory)
             return SolverMuJoCo(model, **solver_cfg)
         elif NewtonManager._solver_type == "xpbd":
             return SolverXPBD(model, **solver_cfg)
