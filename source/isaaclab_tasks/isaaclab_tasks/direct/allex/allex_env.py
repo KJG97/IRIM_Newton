@@ -45,8 +45,9 @@ class AllexEnv(DirectRLEnv):
             # find_joints returns (mask, names, indices)
             _, self._joint_names, self._joint_dof_idx = self.robot.find_joints(".*")
             name_to_idx = {n: i for i, n in enumerate(self._joint_names)}
+            mimic_spec = getattr(self.cfg, "mimic_spec", ALLEX_MIMIC_SPEC)
             self._mimic_overrides = []
-            for mimic_name, driver_name, coef in ALLEX_MIMIC_SPEC:
+            for mimic_name, driver_name, coef in mimic_spec:
                 if mimic_name in name_to_idx and driver_name in name_to_idx:
                     self._mimic_overrides.append((name_to_idx[mimic_name], name_to_idx[driver_name], coef))
 
@@ -55,20 +56,17 @@ class AllexEnv(DirectRLEnv):
 
     def _apply_action(self):
         self._ensure_joint_dof_idx()
-        scale = 0.5
         current = wp.to_torch(self.robot.data.joint_pos)[:, self._joint_dof_idx]
-        target = current + scale * self.actions
-        use_engine_equality = getattr(self.cfg, "use_newton_equality_for_mimic", False)
-        if use_engine_equality and self._mimic_overrides:
-            # MuJoCo equality only: set target for driver joints only. Mimic joints are enforced
-            # by the solver (equality constraint) in each substep; no _poly here.
+        target = current + self.actions
+        if self._mimic_overrides:
+            # Newton equality: set target for driver joints only. Mimic joints are enforced by the solver.
             mimic_positions = {mimic_i for (mimic_i, _, _) in self._mimic_overrides}
             driver_positions = [j for j in range(len(self._joint_dof_idx)) if j not in mimic_positions]
             driver_joint_ids = [self._joint_dof_idx[j] for j in driver_positions]
             target_driver = target[:, driver_positions]
             self.robot.set_joint_position_target(target_driver, joint_ids=driver_joint_ids)
         else:
-            print("use_engine_equality not")
+            self.robot.set_joint_position_target(target, joint_ids=self._joint_dof_idx)
 
 
     def _get_observations(self) -> dict:

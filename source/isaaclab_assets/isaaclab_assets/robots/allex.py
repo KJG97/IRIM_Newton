@@ -14,7 +14,7 @@ from isaaclab.assets.articulation import ArticulationCfg
 ##
 
 # Get absolute path to USD file relative to this file
-_ALLEX_USD_PATH = Path(__file__).parent.parent.parent / "allex_usd" / "ALLEX_newton.usd"
+_ALLEX_USD_PATH = Path(__file__).parent.parent.parent / "allex_usd" / "allex_test.usd"
 _ALLEX_NO_LEFT_USD_PATH = Path(__file__).parent.parent.parent / "allex_usd" / "ALLEX_newton_no_left.usd"
 
 ALLEX_CFG = ArticulationCfg(
@@ -26,7 +26,7 @@ ALLEX_CFG = ArticulationCfg(
             max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True,
+            enabled_self_collisions=False,
             solver_position_iteration_count=8,
             solver_velocity_iteration_count=0,
         ),
@@ -100,14 +100,14 @@ ALLEX_CFG = ArticulationCfg(
             "R_Little_PIP_Joint": 0.0,
             "R_Little_DIP_Joint": 0.0,
         },
-        pos=(0.15, 0.0, 0.3),
+        pos=(0.0, 0.0, 1.0),
         rot=(0.0, 0.0, 0.0, 1.0),  # init pos of the articulation for teleop
     ),
     actuators={
         # Body lift and torso actuators
         "body": ImplicitActuatorCfg(
             joint_names_expr=["Waist_Yaw_Joint", "Waist_Pitch_Lower_Joint"],
-            effort_limit_sim=10000.0,
+            effort_limit_sim=300.0,
             velocity_limit_sim=2.61,
             stiffness=1000.0,
             damping=100.0,
@@ -120,10 +120,10 @@ ALLEX_CFG = ArticulationCfg(
                 ".*_DIP_Joint",
                 ".*_Thumb_IP_Joint",
             ],
-            effort_limit_sim=0.1,
-            velocity_limit_sim=0.1,
-            stiffness=1.0,
-            damping=0.1,
+            effort_limit_sim=1.0,
+            velocity_limit_sim=0.0,
+            stiffness=0.0,
+            damping=1.0,
         ),
         # Head actuators
         "head": ImplicitActuatorCfg(
@@ -354,10 +354,10 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
                 "R_Ring_DIP_Joint",
                 "R_Little_DIP_Joint",
             ],
-            effort_limit_sim=1000.0,
-            velocity_limit_sim=10.0,
+            effort_limit_sim=1.0,
+            velocity_limit_sim=0.0,
             stiffness=0.0,  # position target 없음; equality가 강제. damping만 사용.
-            damping=1.0,
+            damping=10.0,
         ),
     },
     soft_joint_pos_limit_factor=1.0,

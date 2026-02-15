@@ -34,30 +34,44 @@ ALLEX_MIMIC_SPEC: list[tuple[str, str, tuple[float, ...]]] = [
     ("R_Little_DIP_Joint", "R_Little_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
 ]
 
-# Newton solver 전용 설정
+# Full ALLEX (60 DOF): same as ALLEX_MIMIC_SPEC + left hand mimic (symmetric poly coefs).
+ALLEX_FULL_MIMIC_SPEC: list[tuple[str, str, tuple[float, ...]]] = list(ALLEX_MIMIC_SPEC) + [
+    ("L_Thumb_IP_Joint", "L_Thumb_MCP_Joint", (-0.0015, 0.6651, 0.0186, 0.1224, -0.0696)),
+    ("L_Index_DIP_Joint", "L_Index_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
+    ("L_Middle_DIP_Joint", "L_Middle_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
+    ("L_Ring_DIP_Joint", "L_Ring_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
+    ("L_Little_DIP_Joint", "L_Little_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
+]
+
+# Newton solver 전용 설정. Full ALLEX(60 DOF, 295 shapes)는 mj_forward 시 mjData 스택 부족으로
+# mj_stackAlloc overflow 발생 → mj_data_memory로 arena+stack 크기 확대 필요.
 ALLEX_SOLVER_CFG = MJWarpSolverCfg(
     solver="newton",
     integrator="implicit",
-    njmax=600*NUM_ENVS,
-    nconmax=3000,
+    njmax=600 * NUM_ENVS,
+    nconmax=6000,  # Full ALLEX ~295 shapes → broadphase needs ~5850
     impratio=10.0,
     cone="elliptic",
     update_data_interval=2,
     iterations=100,
     ls_iterations=15,
     ls_parallel=True,
+    mj_data_memory=64 * 1024 * 1024,  # 64 MiB (Full ALLEX: MuJoCo requests >16 MiB for nefc/ncon)
 )
 
 
 @configclass
 class AllexEnvCfg(DirectRLEnvCfg):
-    """Minimal config: ALLEX on a plane with Newton. No objects, no task."""
+    """Minimal config: ALLEX on a plane with Newton (full 60 DOF: waist + both arms/hands). No objects, no task."""
 
     episode_length_s = 30.0
     decimation = 2
     action_space = ALLEX_NUM_DOF
     observation_space = ALLEX_NUM_DOF
     state_space = 0
+
+    mimic_spec: list = ALLEX_FULL_MIMIC_SPEC
+    """(mimic_name, driver_name, (c0,c1,c2,c3,c4)) for env and joint_slider_agent."""
 
     solver_cfg = ALLEX_SOLVER_CFG
     newton_cfg = NewtonCfg(
@@ -77,10 +91,11 @@ class AllexEnvCfg(DirectRLEnvCfg):
     )
 
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=4,
+        num_envs=1,
         env_spacing=2.0,
         replicate_physics=True,
         clone_in_fabric=True,
+        newton_replicate_kwargs={"equality_constraints": ALLEX_FULL_MIMIC_SPEC},
     )
 
     robot: ArticulationCfg = ALLEX_CFG.replace(prim_path="/World/envs/env_.*/Robot")
@@ -96,9 +111,7 @@ class AllexEnvNoLeftCfg(DirectRLEnvCfg):
     observation_space = ALLEX_NO_LEFT_NUM_DOF
     state_space = 0
 
-    use_newton_equality_for_mimic: bool = True
-    """When True, Newton joint equality constraints are used for mimic joints (injected at build time).
-    Only driver joint targets are set in _apply_action. When False, mimic positions are written manually each step."""
+    mimic_spec: list = ALLEX_MIMIC_SPEC
 
     solver_cfg = ALLEX_SOLVER_CFG
     newton_cfg = NewtonCfg(
