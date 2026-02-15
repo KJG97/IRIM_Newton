@@ -3,7 +3,11 @@
 
 """Joint slider agent: same-process PySide GUI to control joint targets.
 
-Run: ./isaaclab.sh -p scripts/environments/joint_slider_agent.py --task Isaac-Allex-Direct-NoLeft-v0 --visualizer newton
+Run (full ALLEX, 60 DOF):
+  ./isaaclab.sh -p scripts/environments/joint_slider_agent.py --task Isaac-Allex-Direct-v0 --visualizer newton
+
+Run (right arm/hand only, 31 DOF):
+  ./isaaclab.sh -p scripts/environments/joint_slider_agent.py --task Isaac-Allex-Direct-NoLeft-v0 --visualizer newton
 
 No TCP; GUI runs in the same process. Only active (driver) joints; mimic/passive excluded. Sliders in degrees.
 """
@@ -27,6 +31,22 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
+# Newton이 spec.option.jacobian = mjJAC_AUTO 로 빌드하면 nv>32일 때 sparse가 되어
+# mujoco_warp put_data에서 mjd.flexedge_J_rownnz 등 미지원 속성 참조로 오류 발생.
+# 모델을 처음부터 dense로 빌드하도록 mjJAC_AUTO를 mjJAC_DENSE로 취급하게 패치.
+def _apply_newton_dense_jacobian_patch():
+    try:
+        import mujoco
+        try:
+            mujoco.mjtJacobian.mjJAC_AUTO = mujoco.mjtJacobian.mjJAC_DENSE
+        except (AttributeError, TypeError):
+            mujoco.mjtJacobian.__dict__["mjJAC_AUTO"] = mujoco.mjtJacobian.mjJAC_DENSE
+    except Exception:
+        pass
+
+
+_apply_newton_dense_jacobian_patch()
+
 """Rest everything follows."""
 
 import gymnasium as gym
@@ -42,7 +62,6 @@ Timer.enable_display_output = False
 import isaaclab_tasks_experimental  # noqa: F401
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
-from isaaclab_tasks.direct.allex.allex_env_cfg import ALLEX_MIMIC_SPEC
 
 # PySide6 (same process, no TCP)
 try:
@@ -308,8 +327,9 @@ def main():
                 upper_w = wp.to_torch(robot.data.joint_pos_limits_upper)[0]
                 lower = [float(lower_w[i].item()) for i in joint_dof_idx]
                 upper = [float(upper_w[i].item()) for i in joint_dof_idx]
-                # Only active (driver) joints; exclude mimic/passive from ALLEX_MIMIC_SPEC
-                mimic_names = {m[0] for m in ALLEX_MIMIC_SPEC}
+                # Only active (driver) joints; exclude mimic from env_cfg.mimic_spec (NoLeft or Full)
+                mimic_spec = getattr(unwrapped.cfg, "mimic_spec", None) or []
+                mimic_names = {m[0] for m in mimic_spec}
                 driver_full_indices = [i for i, n in enumerate(joint_names) if n not in mimic_names]
                 driver_names = [joint_names[i] for i in driver_full_indices]
                 driver_lower = [lower[i] for i in driver_full_indices]
@@ -318,7 +338,7 @@ def main():
                 name_to_full_idx = {joint_names[i]: i for i in range(num_full)}
                 driver_name_to_k = {driver_names[k]: k for k in range(len(driver_names))}
                 driver_mimics_info = [[] for _ in range(len(driver_names))]
-                for mimic_name, driver_name, polycoef in ALLEX_MIMIC_SPEC:
+                for mimic_name, driver_name, polycoef in mimic_spec:
                     if driver_name not in driver_name_to_k or mimic_name not in name_to_full_idx:
                         continue
                     k = driver_name_to_k[driver_name]
