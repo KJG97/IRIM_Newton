@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import warp as wp
-from pxr import Sdf
+from pxr import Gf, Sdf
 
 import isaaclab.sim as sim_utils
 from isaaclab import cloner
@@ -157,13 +157,16 @@ class InteractiveScene:
             if self.cfg.filter_collisions:
                 self.filter_collisions(self._global_prim_paths)
 
-    def clone_environments(self, copy_from_source: bool = False):
+    def clone_environments(self, copy_from_source: bool = False, force_simple_replicate: bool = False):
         """Creates clones of the environment ``/World/envs/env_0``.
 
         Args:
             copy_from_source: (bool): If set to False, clones inherit from /World/envs/env_0 and mirror its changes.
             If True, clones are independent copies of the source prim and won't reflect its changes (start-up time
             may increase). Defaults to False.
+            force_simple_replicate: (bool): If True, use simple env replication (newton_replicate with env_origins)
+            and rebuild the Newton model from the current stage. Used by ManagerBased so that, like Direct,
+            the physics model is built after all assets (e.g. table, robot) are in place. Defaults to False.
         """
         # when replicate_physics=False, we assume heterogeneous environments and clone the xforms first.
         # this triggers per-object level cloning in the spawner.
@@ -171,12 +174,29 @@ class InteractiveScene:
             prim = self.stage.GetPrimAtPath("/physicsScene")
             prim.CreateAttribute("physxScene:envIdInBoundsBitCount", Sdf.ValueTypeNames.Int).Set(4)
 
-        if self._is_scene_setup_from_cfg():
-            self.cloner_cfg.clone_physics = not copy_from_source
+        use_template = self._is_scene_setup_from_cfg() and not force_simple_replicate
+        if use_template:
+            self.cloner_cfg.env_origins = self._default_env_origins
+            # When delay_physics_replicate: first pass only USD copy; Newton built on second call (force_simple_replicate).
+            delay_physics = getattr(self.cfg, "delay_physics_replicate", False)
+            self.cloner_cfg.clone_physics = False if delay_physics else (not copy_from_source)
             cloner.clone_from_template(self.stage, num_clones=self.num_envs, template_clone_cfg=self.cloner_cfg)
         else:
             mapping = torch.ones((1, self.num_envs), device=self.device, dtype=torch.bool)
             replicate_args = [self.env_fmt.format(0)], [self.env_fmt], self._ALL_INDICES, mapping
+
+            # Force env root positions on stage so Newton sees correct layout (same as Direct).
+            rl = self.stage.GetRootLayer()
+            with Sdf.ChangeBlock():
+                for i in range(self.num_envs):
+                    dp = self.env_fmt.format(i)
+                    ps = rl.GetPrimAtPath(dp)
+                    if ps:
+                        p = self._default_env_origins[i]
+                        t_attr = ps.GetAttributeAtPath(dp + ".xformOp:translate")
+                        if t_attr is None:
+                            t_attr = Sdf.AttributeSpec(ps, "xformOp:translate", Sdf.ValueTypeNames.Double3)
+                        t_attr.default = Gf.Vec3d(float(p[0]), float(p[1]), float(p[2]))
 
             if not copy_from_source:
                 # skip physx cloning, this means physx will walk and parse the stage one by one faithfully
@@ -573,9 +593,12 @@ class InteractiveScene:
                 # In order to compose cloner behavior more flexibly, we ask each spawner to spawn prototypes in
                 # prepared /World/template path, once all template is ready, cloner can determine what rules to follow
                 # to combine, and distribute the templates to cloned environments.
+                # When use_template_cloning=False (e.g. static table), spawn directly under env_.* so env roots
+                # are never overwritten and multi-env alignment matches Allegro in-hand object behavior.
                 asset_cfg.prim_path = asset_cfg.prim_path.replace(self.env_regex_ns, "{ENV_REGEX_NS}")
                 destinations_regex_ns = asset_cfg.prim_path.format(ENV_REGEX_NS=self.env_regex_ns)
-                if self.env_regex_ns[:-2] in destinations_regex_ns:
+                use_template = getattr(asset_cfg, "use_template_cloning", True)
+                if use_template and self.env_regex_ns[:-2] in destinations_regex_ns:
                     require_clone = True
                     prototype_root = asset_cfg.prim_path.format(ENV_REGEX_NS=self.cloner_cfg.template_root)
                     asset_cfg.prim_path = f"{prototype_root}/{self.cloner_cfg.template_prototype_identifier}_.*"

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 import math
 import torch
 from typing import TYPE_CHECKING
@@ -18,6 +19,10 @@ from isaaclab.sim.utils import safe_set_attribute_on_usd_prim
 
 if TYPE_CHECKING:
     from .cloner_cfg import TemplateCloneCfg
+
+# Set True to enable newton_replicate debug logs (positions, sources, prototype body/shape keys).
+# Uses print() so output appears regardless of logging config. Set False when done debugging.
+DEBUG_NEWTON_REPLICATE = True
 
 
 def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: TemplateCloneCfg) -> None:
@@ -64,12 +69,34 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
         usd_replicate(stage, src_paths, dest_paths, world_indices, proto_mask)
         stage.GetPrimAtPath(cfg.template_root).SetActive(False)
 
+        # Re-apply env root positions so the stage has correct translates (first replicate can overwrite with identity).
+        env_origins = getattr(cfg, "env_origins", None)
+        if env_origins is not None and env_origins.shape[0] >= num_clones:
+            rl = stage.GetRootLayer()
+            with Sdf.ChangeBlock():
+                for i in world_indices.tolist():
+                    dp = clone_path_fmt.format(i)
+                    ps = rl.GetPrimAtPath(dp)
+                    if ps:
+                        t_attr = ps.GetAttributeAtPath(dp + ".xformOp:translate")
+                        if t_attr is None:
+                            t_attr = Sdf.AttributeSpec(ps, "xformOp:translate", Sdf.ValueTypeNames.Double3)
+                        p = env_origins[i]
+                        t_attr.default = Gf.Vec3d(float(p[0]), float(p[1]), float(p[2]))
+
         # If all prototypes map to env_0, clone whole env_0 to all envs; else clone per-object
         if torch.all(proto_idx == 0):
-            # args: src_paths, dest_paths, env_ids, mask
-            replicate_args = [clone_path_fmt.format(0)], [clone_path_fmt], world_indices, clone_masking
-            get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
-            positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
+            # One source (whole env 0) → mapping must be (1, num_clones) for physics/usd clone APIs
+            whole_env_mapping = torch.ones(1, num_clones, dtype=torch.bool, device=cfg.device)
+            replicate_args = [clone_path_fmt.format(0)], [clone_path_fmt], world_indices, whole_env_mapping
+            # Use env_origins from cfg when set; otherwise read from stage. After the first usd_replicate
+            # above, env roots were overwritten by the prototype (identity), so stage positions are often
+            # all (0,0,0). Passing env_origins (e.g. from grid_transforms) fixes multi-env alignment.
+            if getattr(cfg, "env_origins", None) is not None:
+                positions = cfg.env_origins.to(cfg.device)
+            else:
+                get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
+                positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
             if cfg.clone_physics:
                 clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
                 template_clone_cfg.physics_clone_fn(stage, *replicate_args, positions=positions, **clone_kwargs)
@@ -80,8 +107,13 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
         else:
             selected_src = [tpl.format(int(idx)) for tpl, idx in zip(dest_paths, proto_idx.tolist())]
             replicate_args = selected_src, dest_paths, world_indices, clone_masking
+            # Use env_origins for physics clone so each world is placed at grid positions (else Newton uses zeros).
+            # Do not pass positions to usd_replicate here: dests include env_{}/table etc.; setting their
+            # translate would overwrite the table's local pose.
+            clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
+            if getattr(cfg, "env_origins", None) is not None:
+                clone_kwargs = {**clone_kwargs, "positions": cfg.env_origins.to(cfg.device)}
             if cfg.clone_physics:
-                clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
                 template_clone_cfg.physics_clone_fn(stage, *replicate_args, **clone_kwargs)
             if cfg.clone_usd:
                 usd_replicate(stage, *replicate_args)
@@ -331,7 +363,7 @@ def newton_replicate(
         solvers.SolverMuJoCo.register_custom_attributes(p)
         p.add_usd(stage, root_path=src_path, load_visual_shapes=True)
         if simplify_meshes:
-            p.approximate_meshes("convex_hull")
+            p.approximate_meshes("convex_hull", keep_visual_shapes=True)
         # Inject joint equality constraints (e.g. mimic joints) so SolverMuJoCo enforces them
         if equality_constraints:
             added = 0
@@ -346,21 +378,38 @@ def newton_replicate(
                     )
                     added += 1
             if added == 0 and equality_constraints:
-                import logging
-
                 log = logging.getLogger("isaaclab.cloner")
                 log.warning(
                     "newton_replicate: no joint equality constraints added (joint names may not match). "
                     "joint_key sample: %s",
                     list(getattr(p, "joint_key", []))[:10],
                 )
-        # Debugging: no_left vs Right_Arm mesh count (uncomment to inspect)
-        # print(f"[newton_replicate] {src_path} -> bodies={p.body_count}, shapes={p.shape_count}, body_key[:5]={getattr(p, 'body_key', [])[:5]}")
+        if DEBUG_NEWTON_REPLICATE:
+            body_keys = list(getattr(p, "body_key", []))
+            shape_keys = list(getattr(p, "shape_key", [])) if hasattr(p, "shape_key") else []
+            print(
+                f"[newton_replicate] prototype {src_path} -> body_count={getattr(p, 'body_count', '?')} "
+                f"shape_count={getattr(p, 'shape_count', '?')} body_key={body_keys[:20] if len(body_keys) > 20 else body_keys} "
+                f"shape_key_sample={shape_keys[:10] if shape_keys else []}",
+                flush=True,
+            )
         protos[src_path] = p
 
+    if DEBUG_NEWTON_REPLICATE:
+        print(
+            f"[newton_replicate] sources={sources} env_ids={env_ids.tolist()} positions={positions.tolist()} "
+            f"quaternions={quaternions.tolist()} mapping={mapping.tolist()}",
+            flush=True,
+        )
     # add by world, then by active sources in that world (column-wise)
     for col, env_id in enumerate(env_ids.tolist()):
         for row in torch.nonzero(mapping[:, col], as_tuple=True)[0].tolist():
+            if DEBUG_NEWTON_REPLICATE:
+                print(
+                    f"[newton_replicate] add_world col={col} env_id={env_id} position={positions[col].tolist()} "
+                    f"quat={quaternions[col].tolist()} source={sources[row]}",
+                    flush=True,
+                )
             builder.add_world(
                 protos[sources[row]],
                 xform=wp.transform(positions[col].tolist(), quaternions[col].tolist()),
