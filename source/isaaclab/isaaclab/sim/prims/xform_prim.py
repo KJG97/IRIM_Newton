@@ -16,7 +16,7 @@ import numpy as np
 import torch
 from collections.abc import Sequence
 
-from pxr import Gf, Usd, UsdGeom
+from pxr import Gf, Sdf, Usd, UsdGeom
 
 from isaaclab.sim.utils.stage import get_current_stage
 
@@ -321,6 +321,12 @@ class XFormPrim:
 
                 local_t, local_q = self._world_to_local_tq(prim, world_t, world_q)
                 translate_op.Set(local_t)
+                # USD attribute may be Quatf (e.g. from referenced USD); Set() requires exact type match.
+                if orient_attr.GetTypeName() == Sdf.ValueTypeNames.Quatf:
+                    local_q = Gf.Quatf(
+                        local_q.GetReal(),
+                        Gf.Vec3f(local_q.GetImaginary()[0], local_q.GetImaginary()[1], local_q.GetImaginary()[2]),
+                    )
                 orient_op.Set(local_q)
 
     def set_local_poses(
@@ -389,6 +395,8 @@ class XFormPrim:
                 y = float(orient_np[idx, 1])
                 z = float(orient_np[idx, 2])
                 quat = Gf.Quatd(w, Gf.Vec3d(x, y, z))
+                if orient_attr and orient_attr.GetTypeName() == Sdf.ValueTypeNames.Quatf:
+                    quat = Gf.Quatf(quat.GetReal(), Gf.Vec3f(quat.GetImaginary()[0], quat.GetImaginary()[1], quat.GetImaginary()[2]))
                 orient_op.Set(quat)
 
     def set_local_scales(

@@ -100,10 +100,14 @@ class NewtonViewerGL(ViewerGL):
 
         Newton's default falls back to ShapeFlags.VISIBLE for colliders when show_collision
         is False, so collision meshes can stay visible. Here we hide colliders when
-        show_collision is False regardless of VISIBLE flag.
+        show_collision is False regardless of VISIBLE flag, except for static geoms
+        (e.g. table, ground) which are always shown so they are visible without
+        enabling "Show Collision".
         """
         is_collider = bool(flags & int(newton.ShapeFlags.COLLIDE_SHAPES))
         if is_collider:
+            if is_static:
+                return True  # static geometry (table, etc.): always show
             return self.show_collision
         return super()._should_show_shape(flags, is_static)
 
