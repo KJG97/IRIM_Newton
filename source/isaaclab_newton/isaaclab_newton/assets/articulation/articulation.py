@@ -1807,7 +1807,7 @@ class Articulation(BaseArticulation):
         prim_path = root_prim_path_expr.replace(".*", "*")
 
         self._root_view = NewtonArticulationView(
-            NewtonManager.get_model(), prim_path, verbose=True, exclude_joint_types=[JointType.FREE, JointType.FIXED]
+            NewtonManager.get_model(), prim_path, verbose=False, exclude_joint_types=[JointType.FREE, JointType.FIXED]
         )
 
         # container for data access
@@ -1855,11 +1855,13 @@ class Articulation(BaseArticulation):
             wp.spatial_vectorf(*default_root_velocity), self._data.default_root_vel, self.num_instances
         )
         # -- joint pos
-
+        # Newton joint_names may include path prefix (e.g. env_0/Robot/R_Elbow_Joint); init_state uses short
+        # names. Match by last path component so configs can use short names like other robots (unitree, franka).
         if self.num_joints > 0:
+            joint_names_for_match = [name.split("/")[-1] for name in self.joint_names]
             # joint pos
             indices_list, _, values_list = string_utils.resolve_matching_names_values(
-                self.cfg.init_state.joint_pos, self.joint_names
+                self.cfg.init_state.joint_pos, joint_names_for_match
             )
             # Compute the mask once and use it for all joint operations
             wp.launch(
@@ -1875,7 +1877,7 @@ class Articulation(BaseArticulation):
             )
             # joint vel
             indices_list, _, values_list = string_utils.resolve_matching_names_values(
-                self.cfg.init_state.joint_vel, self.joint_names
+                self.cfg.init_state.joint_vel, joint_names_for_match
             )
             wp.launch(
                 update_array2D_with_array1D_indexed,
@@ -1901,6 +1903,12 @@ class Articulation(BaseArticulation):
         self._root_view.set_root_transforms(
             NewtonManager.get_model(), wp.from_torch(generated_pose, dtype=wp.transformf)
         )
+        # Apply default joint state to Newton state_0 so the sim starts at init_state (not zeros).
+        if self.num_joints > 0:
+            self.write_joint_state_to_sim(
+                self._data.default_joint_pos,
+                self._data.default_joint_vel,
+            )
 
     """
     Internal simulation callbacks.
