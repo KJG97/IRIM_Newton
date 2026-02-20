@@ -3,4 +3,5 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from .dexblind_newton import *
 from .reach import *
