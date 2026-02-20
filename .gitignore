@@ -69,3 +69,8 @@ tests/
 
 # Docker history
 .isaac-lab-docker-history
+
+# Local utils and artifacts (do not push)
+dvcc/
+imgui.ini
+MUJOCO_LOG.TXT
