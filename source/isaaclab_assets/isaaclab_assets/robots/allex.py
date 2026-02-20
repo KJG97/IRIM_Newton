@@ -100,7 +100,7 @@ ALLEX_CFG = ArticulationCfg(
             "R_Little_PIP_Joint": 0.0,
             "R_Little_DIP_Joint": 0.0,
         },
-        pos=(0.0, 0.0, 1.0),
+        pos=(0.15, 0.0, 0.3),
         rot=(0.0, 0.0, 0.0, 1.0),  # init pos of the articulation for teleop
     ),
     actuators={
@@ -109,8 +109,8 @@ ALLEX_CFG = ArticulationCfg(
             joint_names_expr=["Waist_Yaw_Joint", "Waist_Pitch_Lower_Joint"],
             effort_limit_sim=300.0,
             velocity_limit_sim=2.61,
-            stiffness=1000.0,
-            damping=100.0,
+            stiffness=100.0,
+            damping=10.0,
         ),
         # Passive/mimic joints (12): Dummy, Upper waist; all DIP; Thumb IP. Newton/MuJoCo requires actfrcrange[0] < actfrcrange[1]
         "passive": ImplicitActuatorCfg(
@@ -123,7 +123,7 @@ ALLEX_CFG = ArticulationCfg(
             effort_limit_sim=1.0,
             velocity_limit_sim=0.0,
             stiffness=0.0,
-            damping=1.0,
+            damping=10.0,
         ),
         # Head actuators
         "head": ImplicitActuatorCfg(
@@ -131,7 +131,7 @@ ALLEX_CFG = ArticulationCfg(
             effort_limit_sim=50.0,
             velocity_limit_sim=1.0,
             stiffness=80.0,
-            damping=4.0,
+            damping=8.0,
         ),
         # Left arm actuator
         "left_arm": ImplicitActuatorCfg(
@@ -281,13 +281,13 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
             "R_Shoulder_Pitch_Joint": 0.0,
             "R_Shoulder_Roll_Joint": 0.0,
             "R_Shoulder_Yaw_Joint": 0.0,
-            "R_Elbow_Joint": 0.0,
-            "R_Wrist_Yaw_Joint": 0.0,
+            "R_Elbow_Joint": -1.5708,
+            "R_Wrist_Yaw_Joint": 3.49066,
             "R_Wrist_Roll_Joint": 0.0,
             "R_Wrist_Pitch_Joint": 0.0,
             "R_Thumb_Yaw_Joint": 0.0,
-            "R_Thumb_CMC_Joint": 0.0,
-            "R_Thumb_MCP_Joint": 0.0,
+            "R_Thumb_CMC_Joint": 0.872665,
+            "R_Thumb_MCP_Joint": 0.349066,
             "R_Thumb_IP_Joint": 0.0,
             "R_Index_Roll_Joint": 0.0,
             "R_Index_MCP_Joint": 0.0,
