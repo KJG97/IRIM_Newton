@@ -31,9 +31,15 @@ args_cli = parser.parse_args()
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-# Newton이 spec.option.jacobian = mjJAC_AUTO 로 빌드하면 nv>32일 때 sparse가 되어
-# mujoco_warp put_data에서 mjd.flexedge_J_rownnz 등 미지원 속성 참조로 오류 발생.
-# 모델을 처음부터 dense로 빌드하도록 mjJAC_AUTO를 mjJAC_DENSE로 취급하게 패치.
+# _apply_newton_dense_jacobian_patch 가 필요한 이유:
+# - Newton/MuJoCo는 Jacobian을 dense 또는 sparse로 빌드할 수 있음. spec.option.jacobian 이
+#   mjJAC_AUTO 이면 nv(velocity DOF 수)에 따라 자동 선택하는데, nv > 32 이면 sparse 를 씀.
+# - Isaac Lab은 GPU 솔버로 mujoco_warp 을 사용함. mujoco_warp 의 put_data() 는 mjData 를
+#   Warp 로 복사할 때, sparse Jacobian 전용 필드(mjd.flexedge_J_rownnz 등)를 참조하는데,
+#   현재 mujoco_warp 에서 이 필드들이 구현/지원되지 않아 참조 시 오류가 발생함.
+# - 따라서 nv 가 32 를 넘는 모델(예: ALLEX 60 DOF)에서 AUTO 가 sparse 를 선택하지 않도록,
+#   mjJAC_AUTO 값을 mjJAC_DENSE 로 덮어써서 "항상 dense 로 빌드"되게 함. 이 패치 없이는
+#   해당 환경 실행 시 put_data 단계에서 실패함.
 def _apply_newton_dense_jacobian_patch():
     try:
         import mujoco
@@ -63,37 +69,24 @@ import isaaclab_tasks_experimental  # noqa: F401
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
-# PySide6 (same process, no TCP)
-try:
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import (
-        QApplication,
-        QFormLayout,
-        QHBoxLayout,
-        QLabel,
-        QMainWindow,
-        QScrollArea,
-        QSlider,
-        QWidget,
-    )
-except ImportError:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QFormLayout,
-        QHBoxLayout,
-        QLabel,
-        QMainWindow,
-        QScrollArea,
-        QSlider,
-        QWidget,
-    )
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QScrollArea,
+    QSlider,
+    QWidget,
+)
 
 # Action scale used in AllexEnv._apply_action (target = current + scale * actions)
 ALLEX_ACTION_SCALE = 0.5
 
 # Slider integer range; value mapped to [lower_deg, upper_deg]
 SLIDER_RESOLUTION = 10000
+SLIDER_RESOLUTION_INV = 1.0 / SLIDER_RESOLUTION
 
 
 def _rad2deg(r: float) -> float:
@@ -105,21 +98,25 @@ def _deg2rad(d: float) -> float:
 
 
 def _poly_scalar(q_rad: float, c0: float, c1: float, c2: float, c3: float, c4: float) -> float:
-    """q_mimic = c0 + c1*q + c2*q^2 + c3*q^3 + c4*q^4 (scalar, for passive target display)."""
-    q2 = q_rad * q_rad
-    q3 = q2 * q_rad
-    q4 = q3 * q_rad
-    return c0 + c1 * q_rad + c2 * q2 + c3 * q3 + c4 * q4
+    """q_mimic = c0 + c1*q + c2*q^2 + c3*q^3 + c4*q^4. Horner's method."""
+    return c0 + q_rad * (c1 + q_rad * (c2 + q_rad * (c3 + q_rad * c4)))
+
+
+def _normalize_polycoef(polycoef: tuple[float, ...]) -> tuple[float, float, float, float, float]:
+    """Pad or slice to exactly (c0, c1, c2, c3, c4)."""
+    t = (polycoef + (0.0,) * 5)[:5]
+    return (t[0], t[1], t[2], t[3], t[4])
 
 
 # GUI colors: dark gray bg, bold; coupling-free=green, active(coupling)=red, passive=light red
-STYLE_DARK = """
-    QMainWindow, QWidget, QScrollArea { background-color: #3d3d3d; }
-    QLabel, QSlider { font-weight: bold; color: #e0e0e0; }
+STYLE_BG = "background-color: #3d3d3d;"
+STYLE_DARK = f"""
+    QMainWindow, QWidget, QScrollArea {{ {STYLE_BG} }}
+    QLabel, QSlider {{ font-weight: bold; color: #e0e0e0; }}
 """
-STYLE_DRIVER_NO_COUPLING = "font-weight: bold; color: #90EE90;"   # 연두
-STYLE_DRIVER_COUPLING = "font-weight: bold; color: #FF0000;"     # 빨강 (Active)
-STYLE_PASSIVE = "font-weight: bold; color: #FFB0B0;"             # 연한 빨강
+STYLE_DRIVER_NO_COUPLING = "font-weight: bold; color: #90EE90;"
+STYLE_DRIVER_COUPLING = "font-weight: bold; color: #FF0000;"
+STYLE_PASSIVE = "font-weight: bold; color: #FFB0B0;"
 
 
 class JointSliderWindow(QMainWindow):
@@ -155,8 +152,8 @@ class JointSliderWindow(QMainWindow):
         if driver_mimics_info is None or len(driver_mimics_info) != self._n:
             driver_mimics_info = [[] for _ in range(self._n)]
         self._driver_mimics_info = driver_mimics_info
-        # passive rows: (driver_k, polycoef, current_lbl, target_lbl, mimic_full_idx)
-        self._passive_display: list[tuple[int, tuple[float, ...], QLabel, QLabel, int]] = []
+        # passive rows: (driver_k, (c0,c1,c2,c3,c4), current_lbl, target_lbl, mimic_full_idx)
+        self._passive_display: list[tuple[int, tuple[float, float, float, float, float], QLabel, QLabel, int]] = []
         if driver_initial_rad is None or len(driver_initial_rad) != self._n:
             driver_initial_rad = [0.0] * self._n
         self._driver_initial_rad = driver_initial_rad
@@ -167,16 +164,15 @@ class JointSliderWindow(QMainWindow):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("background-color: #3d3d3d;")
+        scroll.setStyleSheet(STYLE_BG)
         scroll_content = QWidget()
-        scroll_content.setStyleSheet("background-color: #3d3d3d;")
+        scroll_content.setStyleSheet(STYLE_BG)
         scroll_layout = QFormLayout(scroll_content)
         scroll.setWidget(scroll_content)
 
         for i in range(self._n):
             name = driver_names[i]
             driver_style = STYLE_DRIVER_COUPLING if self._is_coupling_driver[i] else STYLE_DRIVER_NO_COUPLING
-            lo_rad, hi_rad = driver_lower_rad[i], driver_upper_rad[i]
             current_lbl = QLabel("0.0°")
             current_lbl.setMinimumWidth(56)
             current_lbl.setStyleSheet(driver_style)
@@ -192,7 +188,7 @@ class JointSliderWindow(QMainWindow):
             target_lbl.setStyleSheet(driver_style)
             self._target_labels.append(target_lbl)
             row_widget = QWidget()
-            row_widget.setStyleSheet("background-color: #3d3d3d;")
+            row_widget.setStyleSheet(STYLE_BG)
             row_layout = QHBoxLayout(row_widget)
             row_layout.setContentsMargins(0, 0, 0, 0)
             name_lbl = QLabel(name)
@@ -214,9 +210,9 @@ class JointSliderWindow(QMainWindow):
                 p_tgt = QLabel("0.0°")
                 p_tgt.setMinimumWidth(56)
                 p_tgt.setStyleSheet(STYLE_PASSIVE)
-                self._passive_display.append((i, polycoef, p_cur, p_tgt, mimic_full_idx))
+                self._passive_display.append((i, _normalize_polycoef(polycoef), p_cur, p_tgt, mimic_full_idx))
                 pw = QWidget()
-                pw.setStyleSheet("background-color: #3d3d3d;")
+                pw.setStyleSheet(STYLE_BG)
                 pl = QHBoxLayout(pw)
                 pl.setContentsMargins(0, 0, 0, 0)
                 pname = QLabel("  └ " + mimic_name)
@@ -234,7 +230,7 @@ class JointSliderWindow(QMainWindow):
     def _slider_to_deg(self, slider_idx: int, slider_val: int) -> float:
         lo, hi = self._lower_rad[slider_idx], self._upper_rad[slider_idx]
         lo_deg, hi_deg = _rad2deg(lo), _rad2deg(hi)
-        return lo_deg + (hi_deg - lo_deg) * (slider_val / SLIDER_RESOLUTION)
+        return lo_deg + (hi_deg - lo_deg) * (slider_val * SLIDER_RESOLUTION_INV)
 
     def _deg_to_slider(self, slider_idx: int, deg: float) -> int:
         lo, hi = self._lower_rad[slider_idx], self._upper_rad[slider_idx]
@@ -256,11 +252,10 @@ class JointSliderWindow(QMainWindow):
     def _update_passive_targets_for_driver(self, driver_k: int) -> None:
         """Update target labels of passive rows that follow driver_k (target = _poly(driver))."""
         q_driver_rad = _deg2rad(self._slider_to_deg(driver_k, self._sliders[driver_k].value()))
-        for dk, polycoef, _cur_lbl, tgt_lbl, _mimic_idx in self._passive_display:
+        for dk, coef5, _cur_lbl, tgt_lbl, _mimic_idx in self._passive_display:
             if dk != driver_k:
                 continue
-            c0, c1, c2, c3, c4 = (polycoef + (0.0,) * 5)[:5]
-            q_mimic_rad = _poly_scalar(q_driver_rad, c0, c1, c2, c3, c4)
+            q_mimic_rad = _poly_scalar(q_driver_rad, *coef5)
             tgt_lbl.setText(f"{_rad2deg(q_mimic_rad):.1f}°")
 
     def get_target_positions(self, current_full: list[float]) -> list[float]:
@@ -278,107 +273,106 @@ class JointSliderWindow(QMainWindow):
             return
         for k in range(self._n):
             j = self._driver_full_indices[k]
-            deg = _rad2deg(full_positions_rad[j])
-            self._current_labels[k].setText(f"{deg:.1f}°")
-        for driver_k, polycoef, cur_lbl, tgt_lbl, mimic_idx in self._passive_display:
+            self._current_labels[k].setText(f"{_rad2deg(full_positions_rad[j]):.1f}°")
+        # Cache q_driver_rad per driver to avoid repeated slider reads for multiple passive rows
+        driver_rad_cache: dict[int, float] = {}
+        for driver_k, coef5, cur_lbl, tgt_lbl, mimic_idx in self._passive_display:
             cur_lbl.setText(f"{_rad2deg(full_positions_rad[mimic_idx]):.1f}°")
-            q_driver_rad = _deg2rad(self._slider_to_deg(driver_k, self._sliders[driver_k].value()))
-            c0, c1, c2, c3, c4 = (polycoef + (0.0,) * 5)[:5]
-            q_mimic_rad = _poly_scalar(q_driver_rad, c0, c1, c2, c3, c4)
+            if driver_k not in driver_rad_cache:
+                driver_rad_cache[driver_k] = _deg2rad(
+                    self._slider_to_deg(driver_k, self._sliders[driver_k].value())
+                )
+            q_mimic_rad = _poly_scalar(driver_rad_cache[driver_k], *coef5)
             tgt_lbl.setText(f"{_rad2deg(q_mimic_rad):.1f}°")
+
+
+def _create_slider_window(unwrapped, env, device):
+    """Run one step, build driver/mimic info from env, create and return (JointSliderWindow, robot, joint_dof_idx)."""
+    env.step(torch.zeros(env.action_space.shape, device=device))
+    unwrapped._ensure_joint_dof_idx()
+    robot = unwrapped.robot
+    joint_names = unwrapped._joint_names
+    joint_dof_idx = unwrapped._joint_dof_idx
+    lower_w = wp.to_torch(robot.data.joint_pos_limits_lower)[0]
+    upper_w = wp.to_torch(robot.data.joint_pos_limits_upper)[0]
+    lower = [float(lower_w[i].item()) for i in joint_dof_idx]
+    upper = [float(upper_w[i].item()) for i in joint_dof_idx]
+    mimic_spec = getattr(unwrapped.cfg, "mimic_spec", None) or []
+    mimic_names = {m[0] for m in mimic_spec}
+    driver_full_indices = [i for i, n in enumerate(joint_names) if n not in mimic_names]
+    driver_names = [joint_names[i] for i in driver_full_indices]
+    driver_lower = [lower[i] for i in driver_full_indices]
+    driver_upper = [upper[i] for i in driver_full_indices]
+    num_full = len(joint_names)
+    name_to_full_idx = {joint_names[i]: i for i in range(num_full)}
+    driver_name_to_k = {driver_names[k]: k for k in range(len(driver_names))}
+    driver_mimics_info = [[] for _ in range(len(driver_names))]
+    for mimic_name, driver_name, polycoef in mimic_spec:
+        if driver_name not in driver_name_to_k or mimic_name not in name_to_full_idx:
+            continue
+        k = driver_name_to_k[driver_name]
+        driver_mimics_info[k].append((mimic_name, name_to_full_idx[mimic_name], polycoef))
+    is_coupling_driver = [len(driver_mimics_info[k]) > 0 for k in range(len(driver_names))]
+    current_rad = wp.to_torch(robot.data.joint_pos)[0, joint_dof_idx].cpu().tolist()
+    driver_initial_rad = [current_rad[i] for i in driver_full_indices]
+    window = JointSliderWindow(
+        driver_names,
+        driver_lower,
+        driver_upper,
+        driver_full_indices,
+        num_full,
+        driver_initial_rad=driver_initial_rad,
+        is_coupling_driver=is_coupling_driver,
+        driver_mimics_info=driver_mimics_info,
+    )
+    print(
+        f"[INFO]: Joint slider ready: {len(driver_names)} active joints (degree), "
+        f"{num_full - len(driver_names)} mimic excluded"
+    )
+    return window, robot, joint_dof_idx
 
 
 def main():
     """Joint slider agent: env loop + same-process PySide window."""
     qt_app = QApplication.instance() or QApplication([])
-
     env_cfg = parse_env_cfg(
         args_cli.task,
         device=args_cli.device,
         num_envs=args_cli.num_envs,
         use_fabric=not args_cli.disable_fabric,
     )
-
     env = gym.make(args_cli.task, cfg=env_cfg)
     print(f"[INFO]: Gym observation space: {env.observation_space}")
     print(f"[INFO]: Gym action space: {env.action_space}")
-
     env.reset()
 
     unwrapped = env.unwrapped
     device = unwrapped.device
-    num_envs = unwrapped.num_envs
     action_scale = ALLEX_ACTION_SCALE
-    first_step_done = False
+    slider_window: JointSliderWindow | None = None
     robot = None
     joint_dof_idx = None
-    slider_window: JointSliderWindow | None = None
+    first_step_done = False
 
     while is_simulation_running(simulation_app, unwrapped.sim):
         with torch.inference_mode():
             if not first_step_done:
-                actions = torch.zeros(env.action_space.shape, device=device)
-                env.step(actions)
-                unwrapped._ensure_joint_dof_idx()
-                robot = unwrapped.robot
-                joint_names = unwrapped._joint_names
-                joint_dof_idx = unwrapped._joint_dof_idx
-                lower_w = wp.to_torch(robot.data.joint_pos_limits_lower)[0]
-                upper_w = wp.to_torch(robot.data.joint_pos_limits_upper)[0]
-                lower = [float(lower_w[i].item()) for i in joint_dof_idx]
-                upper = [float(upper_w[i].item()) for i in joint_dof_idx]
-                # Only active (driver) joints; exclude mimic from env_cfg.mimic_spec (NoLeft or Full)
-                mimic_spec = getattr(unwrapped.cfg, "mimic_spec", None) or []
-                mimic_names = {m[0] for m in mimic_spec}
-                driver_full_indices = [i for i, n in enumerate(joint_names) if n not in mimic_names]
-                driver_names = [joint_names[i] for i in driver_full_indices]
-                driver_lower = [lower[i] for i in driver_full_indices]
-                driver_upper = [upper[i] for i in driver_full_indices]
-                num_full = len(joint_names)
-                name_to_full_idx = {joint_names[i]: i for i in range(num_full)}
-                driver_name_to_k = {driver_names[k]: k for k in range(len(driver_names))}
-                driver_mimics_info = [[] for _ in range(len(driver_names))]
-                for mimic_name, driver_name, polycoef in mimic_spec:
-                    if driver_name not in driver_name_to_k or mimic_name not in name_to_full_idx:
-                        continue
-                    k = driver_name_to_k[driver_name]
-                    mimic_full_idx = name_to_full_idx[mimic_name]
-                    driver_mimics_info[k].append((mimic_name, mimic_full_idx, polycoef))
-                is_coupling_driver = [len(driver_mimics_info[k]) > 0 for k in range(len(driver_names))]
-                current_rad = wp.to_torch(robot.data.joint_pos)[0, joint_dof_idx].cpu().tolist()
-                driver_initial_rad = [current_rad[i] for i in driver_full_indices]
-                slider_window = JointSliderWindow(
-                    driver_names,
-                    driver_lower,
-                    driver_upper,
-                    driver_full_indices,
-                    num_full,
-                    driver_initial_rad=driver_initial_rad,
-                    is_coupling_driver=is_coupling_driver,
-                    driver_mimics_info=driver_mimics_info,
-                )
+                slider_window, robot, joint_dof_idx = _create_slider_window(unwrapped, env, device)
                 slider_window.show()
-                print(f"[INFO]: Joint slider ready: {len(driver_names)} active joints (degree), {num_full - len(driver_names)} mimic excluded")
                 first_step_done = True
                 continue
 
-            # Process Qt events so window stays responsive
             qt_app.processEvents()
-            if slider_window is not None and not slider_window.isVisible():
+            if not slider_window.isVisible():
                 break
 
-            # Current positions (env 0, action order) — full 31-dim
             joint_pos = wp.to_torch(robot.data.joint_pos)[0, joint_dof_idx]
             current_list = joint_pos.cpu().tolist()
             slider_window.update_current_labels_rad(current_list)
 
-            # Target from GUI (full 31-dim: driver from sliders, mimic = current)
             target = slider_window.get_target_positions(current_list)
             target_t = torch.tensor(target, device=device, dtype=torch.float32)
-            current_t = joint_pos
-            actions = (target_t - current_t) / action_scale
-            actions = torch.clamp(actions, -1.0, 1.0)
-
+            actions = torch.clamp((target_t - joint_pos) / action_scale, -1.0, 1.0)
             env.step(actions)
 
     if slider_window is not None:

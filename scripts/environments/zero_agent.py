@@ -31,6 +31,7 @@ simulation_app = app_launcher.app
 
 import gymnasium as gym
 import torch
+import warp as wp
 
 from isaaclab.utils import close_simulation, is_simulation_running
 from isaaclab.utils.timer import Timer
@@ -44,6 +45,39 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 
 # PLACEHOLDER: Extension template (do not remove this comment)
+
+# Set True to print table, robot base, and env coordinates every DEBUG_POSITIONS_INTERVAL steps.
+DEBUG_POSITIONS = True
+DEBUG_POSITIONS_INTERVAL = 100
+
+
+def _print_scene_positions(env, step: int):
+    """Print env origins, robot base pos, and table pos (if present) for debugging."""
+    scene = env.unwrapped.scene
+    print(f"\n[DEBUG positions] step={step}")
+    # Env origins (num_envs, 3)
+    origins = scene.env_origins
+    if origins is not None and origins.numel():
+        print(f"  env_origins (world): {origins.cpu().tolist()}")
+    # Robot base position (world) — use scene.keys() to avoid __getitem__(index) from "in scene"
+    if "robot" in scene.keys():
+        robot = scene["robot"]
+        try:
+            root_pos = wp.to_torch(robot.data.root_link_pos_w)
+            if root_pos is not None and root_pos.numel():
+                print(f"  robot_base_pos_w: {root_pos.cpu().tolist()}")
+        except Exception as e:
+            print(f"  robot_base_pos_w: (error) {e}")
+    # Table position (world) - from USD Xform if present
+    if "table" in scene.keys():
+        try:
+            table = scene["table"]
+            positions, _ = table.get_world_poses()
+            if positions is not None and positions.numel():
+                print(f"  table_pos_w: {positions.cpu().tolist()}")
+        except Exception as e:
+            print(f"  table_pos_w: (error) {e}")
+    print(flush=True)
 
 
 def main():
@@ -65,6 +99,7 @@ def main():
     # reset environment
     env.reset()
     # simulate environment
+    step_count = 0
     while is_simulation_running(simulation_app, env.unwrapped.sim):
         # run everything in inference mode
         with torch.inference_mode():
@@ -72,6 +107,9 @@ def main():
             actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
             # apply actions
             env.step(actions)
+            step_count += 1
+            if DEBUG_POSITIONS and step_count % DEBUG_POSITIONS_INTERVAL == 0:
+                _print_scene_positions(env, step_count)
 
     # close the simulator
     env.close()
