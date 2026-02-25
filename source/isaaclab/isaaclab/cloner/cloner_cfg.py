@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import torch
 from isaaclab.utils import configclass
 
 from .cloner_strategies import random
@@ -86,7 +85,3 @@ class TemplateCloneCfg:
 
     physics_clone_fn_kwargs: dict | None = None
     """Optional kwargs passed to :attr:`physics_clone_fn` when called (e.g. ``equality_constraints`` for Newton)."""
-
-    env_origins: torch.Tensor | None = None
-    """Per-environment root positions (num_envs, 3). If set, used for physics/USD replicate instead of
-    reading from the stage (which can be (0,0,0) after the first replicate overwrites env roots)."""

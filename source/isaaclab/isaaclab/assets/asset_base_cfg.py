@@ -73,10 +73,5 @@ class AssetBaseCfg:
     * ``0``: local collision group (collides with other assets in the same environment).
     """
 
-    use_template_cloning: bool = True
-    """If True, spawn under /World/template and let clone_from_template distribute to envs.
-    If False, spawn directly under /World/envs/env_.*/... (like Allegro in-hand object):
-    env roots are never overwritten, so multi-env alignment matches single-env. Defaults to True."""
-
     debug_vis: bool = False
     """Whether to enable debug visualization for the asset. Defaults to ``False``."""

@@ -148,10 +148,6 @@ class ManagerBasedEnv:
             # set the stage context for scene creation steps which use the stage
             with use_stage(self.sim.get_initial_stage()):
                 self.scene = InteractiveScene(self.cfg.scene)
-                # Rebuild Newton model from current stage (env_0 has all assets) so env positions match
-                # DirectRLEnv behavior (clone_environments called after _setup_scene adds assets).
-                if getattr(self.scene.cfg, "replicate_physics", False):
-                    self.scene.clone_environments(copy_from_source=False, force_simple_replicate=True)
                 # attach_stage_to_usd_context()
         print("[INFO]: Scene manager: ", self.scene)
 

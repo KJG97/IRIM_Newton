@@ -128,8 +128,3 @@ class InteractiveSceneCfg:
     """Optional kwargs passed to :func:`~isaaclab.cloner.newton_replicate` when cloning (e.g. ``equality_constraints``
     for joint mimic / polynomial equality). Used only in the direct clone path (single env source).
     """
-
-    delay_physics_replicate: bool = False
-    """If True, first clone only does USD replication (no Newton build). Newton is built on the second
-    clone_environments(force_simple_replicate=True) call from ManagerBasedEnv, so the model sees the full stage.
-    Use with ManagerBased + replicate_physics when multi-env alignment (e.g. table vs robot) is wrong otherwise."""
