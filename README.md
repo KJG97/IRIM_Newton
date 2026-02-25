@@ -8,7 +8,8 @@
 [Installation](#-installation) •
 [Project structure](#-project-structure) •
 [Changes summary](#-changes-summary) •
-[Run](#-run)
+[Run](#-run) •
+[Newton Collision Mesh](#-newton-collision-mesh)
 
 </div>
 
@@ -135,6 +136,66 @@ IsaacLab/
 ```
 
 In both tasks, only active (driver) joints appear as sliders; mimic joints follow via equality constraints.
+
+---
+
+## 🔨 Newton Collision Mesh
+
+### Declaring objects with ArticulationCfg
+
+Newton does not support `RigidObjectCfg`. Non-robot objects (hammer, table, etc.) must all be declared as `ArticulationCfg` to be properly loaded by `newton_replicate`.
+
+```python
+# Empty articulation: actuators={}, articulation_root_prim_path=""
+hammer: ArticulationCfg = ArticulationCfg(
+    spawn=sim_utils.UsdFileCfg(usd_path="Hammer.usd", ...),
+    actuators={},
+    articulation_root_prim_path="",
+)
+table: ArticulationCfg = ArticulationCfg(
+    spawn=sim_utils.MeshCuboidCfg(size=(0.4, 0.6, 0.885), ...),
+    actuators={},
+    articulation_root_prim_path="",
+)
+```
+
+### Mesh type mismatch
+
+`approximate_meshes()` only processes shapes with `GeoType.MESH(=7)`. However, `add_usd()` automatically converts meshes to convex hulls during USD loading, causing `simplify_meshes` settings to be silently ignored.
+
+| Asset | Auto-converted to | `approximate_meshes` |
+|-------|-------------------|---------------------|
+| Hammer | `CONVEX_MESH(=10)` (auto convex hull) | Skipped |
+| Table | `BOX(=6)` (cuboid → box primitive) | Skipped |
+| Robot | `CONVEX_MESH(=10)` (auto convex hull) | Skipped |
+
+**Fix**: Pass `skip_mesh_approximation=True` to `add_usd()` to prevent auto-conversion, preserving the original triangle mesh so that `approximate_meshes()` can apply the desired method.
+
+```python
+# cloner_utils.py — skip auto-conversion when simplify_meshes is truthy
+p.add_usd(stage, root_path=src_path, load_visual_shapes=True,
+          skip_mesh_approximation=bool(simplify_meshes))
+```
+
+### Per-asset mesh approximation
+
+Pass a dict to `simplify_meshes` to apply different approximation methods per asset. Keys are matched as substrings against each shape's prim path; `"*"` serves as the fallback.
+
+```python
+newton_replicate_kwargs={
+    "simplify_meshes": {
+        "hammer": ("coacd", {"threshold": 0.15}),  # Preserve concavity (precise decomposition)
+        "table": "bounding_box",                    # Simple box approximation
+        "*": "convex_hull",                         # Everything else (robot, etc.)
+    },
+}
+```
+
+| Method | Result type | Use case |
+|--------|------------|----------|
+| `"convex_hull"` | `CONVEX_MESH` | General purpose, fast |
+| `"coacd"` | Multiple `CONVEX_MESH` | Preserves concave features (requires `coacd` package) |
+| `"bounding_box"` | `BOX` | Simplest approximation |
 
 ---
 
