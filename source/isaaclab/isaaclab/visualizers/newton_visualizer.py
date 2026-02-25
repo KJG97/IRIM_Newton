@@ -96,18 +96,10 @@ class NewtonViewerGL(ViewerGL):
         super().on_key_press(symbol, modifiers)
 
     def _should_show_shape(self, flags: int, is_static: bool) -> bool:
-        """Override so Show Collision checkbox strictly controls collider visibility.
-
-        Newton's default falls back to ShapeFlags.VISIBLE for colliders when show_collision
-        is False, so collision meshes can stay visible. Here we hide colliders when
-        show_collision is False regardless of VISIBLE flag, except for static geoms
-        (e.g. table, ground) which are always shown so they are visible without
-        enabling "Show Collision".
-        """
+        """Show Collision toggles collision-only shapes; shapes with VISIBLE flag always render."""
         is_collider = bool(flags & int(newton.ShapeFlags.COLLIDE_SHAPES))
-        if is_collider:
-            if is_static:
-                return True  # static geometry (table, etc.): always show
+        is_visible = bool(flags & int(newton.ShapeFlags.VISIBLE))
+        if is_collider and not is_visible:
             return self.show_collision
         return super()._should_show_shape(flags, is_static)
 
