@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import itertools
-import logging
 import math
 import torch
 from typing import TYPE_CHECKING
@@ -19,10 +18,6 @@ from isaaclab.sim.utils import safe_set_attribute_on_usd_prim
 
 if TYPE_CHECKING:
     from .cloner_cfg import TemplateCloneCfg
-
-# Set True to enable newton_replicate debug logs (positions, sources, prototype body/shape keys).
-# Uses print() so output appears regardless of logging config. Set False when done debugging.
-DEBUG_NEWTON_REPLICATE = True
 
 
 def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: TemplateCloneCfg) -> None:
@@ -69,34 +64,13 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
         usd_replicate(stage, src_paths, dest_paths, world_indices, proto_mask)
         stage.GetPrimAtPath(cfg.template_root).SetActive(False)
 
-        # Re-apply env root positions so the stage has correct translates (first replicate can overwrite with identity).
-        env_origins = getattr(cfg, "env_origins", None)
-        if env_origins is not None and env_origins.shape[0] >= num_clones:
-            rl = stage.GetRootLayer()
-            with Sdf.ChangeBlock():
-                for i in world_indices.tolist():
-                    dp = clone_path_fmt.format(i)
-                    ps = rl.GetPrimAtPath(dp)
-                    if ps:
-                        t_attr = ps.GetAttributeAtPath(dp + ".xformOp:translate")
-                        if t_attr is None:
-                            t_attr = Sdf.AttributeSpec(ps, "xformOp:translate", Sdf.ValueTypeNames.Double3)
-                        p = env_origins[i]
-                        t_attr.default = Gf.Vec3d(float(p[0]), float(p[1]), float(p[2]))
-
         # If all prototypes map to env_0, clone whole env_0 to all envs; else clone per-object
         if torch.all(proto_idx == 0):
             # One source (whole env 0) → mapping must be (1, num_clones) for physics/usd clone APIs
             whole_env_mapping = torch.ones(1, num_clones, dtype=torch.bool, device=cfg.device)
             replicate_args = [clone_path_fmt.format(0)], [clone_path_fmt], world_indices, whole_env_mapping
-            # Use env_origins from cfg when set; otherwise read from stage. After the first usd_replicate
-            # above, env roots were overwritten by the prototype (identity), so stage positions are often
-            # all (0,0,0). Passing env_origins (e.g. from grid_transforms) fixes multi-env alignment.
-            if getattr(cfg, "env_origins", None) is not None:
-                positions = cfg.env_origins.to(cfg.device)
-            else:
-                get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
-                positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
+            get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
+            positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
             if cfg.clone_physics:
                 clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
                 template_clone_cfg.physics_clone_fn(stage, *replicate_args, positions=positions, **clone_kwargs)
@@ -107,13 +81,8 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
         else:
             selected_src = [tpl.format(int(idx)) for tpl, idx in zip(dest_paths, proto_idx.tolist())]
             replicate_args = selected_src, dest_paths, world_indices, clone_masking
-            # Use env_origins for physics clone so each world is placed at grid positions (else Newton uses zeros).
-            # Do not pass positions to usd_replicate here: dests include env_{}/table etc.; setting their
-            # translate would overwrite the table's local pose.
-            clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
-            if getattr(cfg, "env_origins", None) is not None:
-                clone_kwargs = {**clone_kwargs, "positions": cfg.env_origins.to(cfg.device)}
             if cfg.clone_physics:
+                clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
                 template_clone_cfg.physics_clone_fn(stage, *replicate_args, **clone_kwargs)
             if cfg.clone_usd:
                 usd_replicate(stage, *replicate_args)
@@ -318,6 +287,63 @@ def _newton_joint_index_by_name(builder, name: str) -> int:
     return -1
 
 
+def _approximate_meshes_per_asset(
+    builder,
+    simplify_meshes: bool | str | dict[str, str | tuple[str, dict]],
+) -> None:
+    """Apply ``approximate_meshes`` with per-asset granularity.
+
+    Args:
+        builder: A Newton ``ModelBuilder`` whose shapes have already been loaded.
+        simplify_meshes: Approximation control.
+
+            * ``True`` — use ``"convex_hull"`` for all mesh shapes.
+            * ``str`` — use that method for all mesh shapes.
+            * ``dict`` — per-asset mapping. Keys are name fragments matched against
+              ``shape_key``; ``"*"`` is the fallback. Values can be:
+
+              - ``str`` — method name (e.g. ``"coacd"``).
+              - ``(str, dict)`` — method name + extra kwargs passed to
+                ``approximate_meshes`` (e.g. ``("coacd", {"threshold": 0.05})``).
+    """
+    import newton
+
+    mesh_collide = int(newton.ShapeFlags.COLLIDE_SHAPES)
+    eligible = [
+        i for i in range(builder.shape_count)
+        if builder.shape_type[i] == newton.GeoType.MESH and builder.shape_flags[i] & mesh_collide
+    ]
+    if not eligible:
+        return
+
+    def _parse_entry(entry) -> tuple[str, dict]:
+        if isinstance(entry, tuple):
+            return entry[0], entry[1]
+        return entry, {}
+
+    if isinstance(simplify_meshes, dict):
+        default_entry = simplify_meshes.get("*", "convex_hull")
+        groups: dict[tuple[str, frozenset], list[int]] = {}
+        entry_map: dict[tuple[str, frozenset], dict] = {}
+        for idx in eligible:
+            key = builder.shape_key[idx]
+            method, kwargs = _parse_entry(default_entry)
+            for pattern, val in simplify_meshes.items():
+                if pattern != "*" and pattern in key:
+                    method, kwargs = _parse_entry(val)
+                    break
+            gkey = (method, frozenset(kwargs.items()))
+            groups.setdefault(gkey, []).append(idx)
+            entry_map[gkey] = kwargs
+        for gkey, indices in groups.items():
+            method = gkey[0]
+            builder.approximate_meshes(method, keep_visual_shapes=True,
+                                       shape_indices=indices, **entry_map[gkey])
+    else:
+        method = simplify_meshes if isinstance(simplify_meshes, str) else "convex_hull"
+        builder.approximate_meshes(method, keep_visual_shapes=True)
+
+
 def newton_replicate(
     stage: Usd.Stage,
     sources: list[str],
@@ -327,12 +353,22 @@ def newton_replicate(
     positions: torch.Tensor | None = None,
     quaternions: torch.Tensor | None = None,
     up_axis: str = "Z",
-    simplify_meshes: bool = True,
+    simplify_meshes: bool | str | dict[str, str | tuple[str, dict]] = True,
     equality_constraints: list[tuple[str, str, tuple[float, ...]]] | None = None,
 ):
     """Replicate prims into a Newton ``ModelBuilder`` using a per-source mapping.
 
     Args:
+        simplify_meshes: Controls collision mesh approximation.
+
+            * ``True`` — use ``"convex_hull"`` for all mesh shapes.
+            * ``False`` — disable approximation entirely.
+            * ``str`` — use that single method for all mesh shapes
+              (``"convex_hull"``, ``"coacd"``, ``"vhacd"``, ``"bounding_box"``, ``"bounding_sphere"``).
+            * ``dict`` — per-asset mapping from name fragment to method (or
+              ``(method, kwargs)`` tuple for extra parameters).
+              The special key ``"*"`` sets the fallback for unmatched shapes.
+              Example: ``{"hammer": ("coacd", {"threshold": 0.05}), "table": "bounding_box", "*": "convex_hull"}``
         equality_constraints: Optional list of (mimic_joint_name, driver_joint_name, (c0,c1,c2,c3,c4))
             for Newton joint equality: q_mimic = c0 + c1*q_driver + c2*q_driver^2 + ... .
             Joint names are matched against builder.joint_key (exact or path suffix).
@@ -351,20 +387,14 @@ def newton_replicate(
     builder = ModelBuilder(up_axis=up_axis)
     stage_info = builder.add_usd(stage, ignore_paths=["/World/envs"] + sources)
 
-    # build a prototype for each source
-    # Note: Newton's add_usd() does not apply USD xform scale when loading mesh geometry (unlike
-    # Omniverse, which composes full transform including scale). Assets whose visuals use a
-    # parent scale (e.g. 0.001 for mm→m) will therefore appear at wrong scale in the Newton
-    # visualizer. add_usd has no scale/meters_per_unit argument; workarounds: bake scale into
-    # the USD mesh geometry, or fix the Newton USD importer to apply world scale to mesh vertices.
     protos: dict[str, ModelBuilder] = {}
     for src_path in sources:
         p = ModelBuilder(up_axis=up_axis)
         solvers.SolverMuJoCo.register_custom_attributes(p)
-        p.add_usd(stage, root_path=src_path, load_visual_shapes=True)
+        p.add_usd(stage, root_path=src_path, load_visual_shapes=True,
+                  skip_mesh_approximation=bool(simplify_meshes))
         if simplify_meshes:
-            p.approximate_meshes("convex_hull", keep_visual_shapes=True)
-        # Inject joint equality constraints (e.g. mimic joints) so SolverMuJoCo enforces them
+            _approximate_meshes_per_asset(p, simplify_meshes)
         if equality_constraints:
             added = 0
             for mimic_name, driver_name, polycoef in equality_constraints:
@@ -378,38 +408,19 @@ def newton_replicate(
                     )
                     added += 1
             if added == 0 and equality_constraints:
+                import logging
+
                 log = logging.getLogger("isaaclab.cloner")
                 log.warning(
                     "newton_replicate: no joint equality constraints added (joint names may not match). "
                     "joint_key sample: %s",
                     list(getattr(p, "joint_key", []))[:10],
                 )
-        if DEBUG_NEWTON_REPLICATE:
-            body_keys = list(getattr(p, "body_key", []))
-            shape_keys = list(getattr(p, "shape_key", [])) if hasattr(p, "shape_key") else []
-            print(
-                f"[newton_replicate] prototype {src_path} -> body_count={getattr(p, 'body_count', '?')} "
-                f"shape_count={getattr(p, 'shape_count', '?')} body_key={body_keys[:20] if len(body_keys) > 20 else body_keys} "
-                f"shape_key_sample={shape_keys[:10] if shape_keys else []}",
-                flush=True,
-            )
         protos[src_path] = p
 
-    if DEBUG_NEWTON_REPLICATE:
-        print(
-            f"[newton_replicate] sources={sources} env_ids={env_ids.tolist()} positions={positions.tolist()} "
-            f"quaternions={quaternions.tolist()} mapping={mapping.tolist()}",
-            flush=True,
-        )
     # add by world, then by active sources in that world (column-wise)
     for col, env_id in enumerate(env_ids.tolist()):
         for row in torch.nonzero(mapping[:, col], as_tuple=True)[0].tolist():
-            if DEBUG_NEWTON_REPLICATE:
-                print(
-                    f"[newton_replicate] add_world col={col} env_id={env_id} position={positions[col].tolist()} "
-                    f"quat={quaternions[col].tolist()} source={sources[row]}",
-                    flush=True,
-                )
             builder.add_world(
                 protos[sources[row]],
                 xform=wp.transform(positions[col].tolist(), quaternions[col].tolist()),
