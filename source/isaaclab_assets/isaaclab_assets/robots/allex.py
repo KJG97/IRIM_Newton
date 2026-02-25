@@ -306,7 +306,7 @@ ALLEX_NO_LEFT_CFG = ArticulationCfg(
             "R_Little_PIP_Joint": 0.0,
             "R_Little_DIP_Joint": 0.0,
         },
-        pos=(0.0, 0.0, 1.0),
+        pos=(0.0, 0.0, 0.68),
         rot=(0.0, 0.0, 0.0, 1.0),
     ),
     actuators={
