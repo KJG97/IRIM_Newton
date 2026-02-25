@@ -942,12 +942,12 @@ class RigidObject(BaseRigidObject):
         self._create_buffers()
         self._process_cfg()
 
-        # Offsets the spawned pose by the default root pose prior to initializing the solver. This ensures that the
-        # solver is initialized at the correct pose, avoiding potential miscalculations in the maximum number of
-        # constraints or contact required to run the simulation.
-        # TODO: Do this is warp directly?
+        # Combine default root pose with per-env spacing offsets from the cloner.
+        # The model already contains init_state positions from USD, so we extract only the
+        # inter-environment offsets (relative to env_0) to avoid doubling the XY coordinates.
         generated_pose = wp.to_torch(self._data._default_root_pose).clone()
-        generated_pose[:, :2] += wp.to_torch(self._root_view.get_root_transforms(NewtonManager.get_model()))[:, :2]
+        model_xy = wp.to_torch(self._root_view.get_root_transforms(NewtonManager.get_model()))[:, :2]
+        generated_pose[:, :2] += model_xy - model_xy[0:1]
         self._root_view.set_root_transforms(NewtonManager.get_state_0(), generated_pose)
         self._root_view.set_root_transforms(NewtonManager.get_model(), generated_pose)
 
