@@ -213,7 +213,7 @@ class DexblindNewtonLiftEnvCfg(ManagerBasedRLEnvCfg):
         newton_replicate_kwargs={
             "equality_constraints": list(ALLEX_MIMIC_SPEC),
             "simplify_meshes": {
-                "hammer": "convex_hull", #("coacd", {"threshold": 0.15}),
+                "hammer": ("coacd", {"threshold": 0.15}),
                 "table": "bounding_box",
                 "*": "convex_hull",
             },
