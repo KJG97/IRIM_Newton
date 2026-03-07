@@ -66,6 +66,8 @@ _HAND_JOINT_NAMES_WITH_ROLL = [
 # Arm + hand with Roll (22 joints): for torque observation.
 RIGHT_ARM_HAND_JOINT_NAMES_TORQUE = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES_WITH_ROLL
 
+TEMP_RIGHT_ARM_HAND_JOINT_NAMES = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES
+
 DEXBLIND_NEWTON_SOLVER_CFG = MJWarpSolverCfg(
     solver="newton",
     integrator="implicit",
@@ -173,7 +175,7 @@ class ObservationsCfg:
             params={
                 "asset_cfg": SceneEntityCfg(
                     "robot",
-                    joint_names=RIGHT_ARM_HAND_JOINT_NAMES_TORQUE,
+                    joint_names=TEMP_RIGHT_ARM_HAND_JOINT_NAMES,
                     preserve_order=True,
                 ),
             },
