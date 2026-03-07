@@ -60,7 +60,18 @@ def _load_and_filter_trajectory(path: str, device: torch.device):
     positions = positions[:, keep]
     joint_names = [names_raw[i] for i in keep]
     duration = float(times[-1] - times[0]) if len(times) > 1 else 0.0
-    return times, positions, joint_names, duration, sample_rate
+
+    hammer_pos = hammer_quat = rhand_pos = rhand_quat = None
+    if "hammer_pos" in data:
+        hammer_pos = torch.tensor(data["hammer_pos"], dtype=torch.float32, device=device)
+    if "hammer_quat" in data:
+        hammer_quat = torch.tensor(data["hammer_quat"], dtype=torch.float32, device=device)
+    if "rhand_pos" in data:
+        rhand_pos = torch.tensor(data["rhand_pos"], dtype=torch.float32, device=device)
+    if "rhand_quat" in data:
+        rhand_quat = torch.tensor(data["rhand_quat"], dtype=torch.float32, device=device)
+
+    return times, positions, joint_names, duration, sample_rate, hammer_pos, hammer_quat, rhand_pos, rhand_quat
 
 
 class ReferenceTrajectoryCommand(CommandTerm):
@@ -71,9 +82,12 @@ class ReferenceTrajectoryCommand(CommandTerm):
         path = _resolve_trajectory_path(cfg.trajectory_file)
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Trajectory file not found: {path}")
-        self.times, self.positions, self.joint_names, self.duration, self.sample_rate = (
-            _load_and_filter_trajectory(path, self.device)
-        )
+        (
+            self.times, self.positions, self.joint_names, self.duration, self.sample_rate,
+            self._hammer_pos_traj, self._hammer_quat_traj,
+            self._rhand_pos_traj, self._rhand_quat_traj,
+        ) = _load_and_filter_trajectory(path, self.device)
+
         self.num_frames, self.num_joints = self.positions.shape
         self.loop = cfg.loop
         self.loop_start_time = cfg.loop_start_time
@@ -81,12 +95,22 @@ class ReferenceTrajectoryCommand(CommandTerm):
             assert 0.0 <= self.loop_start_time < self.duration
         self.playback_time = torch.zeros(self.num_envs, device=self.device)
         self.command_buffer = torch.zeros(self.num_envs, self.num_joints, device=self.device)
+
+        self.hammer_pos_buffer = torch.zeros(self.num_envs, 3, device=self.device)
+        self.hammer_quat_buffer = torch.zeros(self.num_envs, 4, device=self.device)
+        self.hammer_quat_buffer[:, 3] = 1.0  # identity w=1
+        self.rhand_pos_buffer = torch.zeros(self.num_envs, 3, device=self.device)
+        self.rhand_quat_buffer = torch.zeros(self.num_envs, 4, device=self.device)
+        self.rhand_quat_buffer[:, 3] = 1.0
+
         self._last_dt = 1.0 / self.sample_rate
         self._initial_playback_done = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.metrics["trajectory_progress"] = torch.zeros(self.num_envs, device=self.device)
+
+        has_pose = self._hammer_pos_traj is not None
         logger.info(
-            "Reference trajectory loaded %s: duration=%.2fs, frames=%s, joints=%s (loop=%s)",
-            path, self.duration, self.num_frames, self.num_joints, self.loop,
+            "Reference trajectory loaded %s: duration=%.2fs, frames=%s, joints=%s (loop=%s, has_pose_data=%s)",
+            path, self.duration, self.num_frames, self.num_joints, self.loop, has_pose,
         )
 
     @property
@@ -155,6 +179,34 @@ class ReferenceTrajectoryCommand(CommandTerm):
         dt = t1 - t0
         blend = torch.where(dt > 1e-6, (t - t0) / dt, torch.zeros_like(t)).unsqueeze(-1)
         self.command_buffer = (1.0 - blend) * self.positions[idx] + blend * self.positions[idx + 1]
+
+        if self._hammer_pos_traj is not None:
+            self.hammer_pos_buffer = (1.0 - blend) * self._hammer_pos_traj[idx] + blend * self._hammer_pos_traj[idx + 1]
+        if self._hammer_quat_traj is not None:
+            self.hammer_quat_buffer = self._slerp_batch(
+                self._hammer_quat_traj[idx], self._hammer_quat_traj[idx + 1], blend.squeeze(-1)
+            )
+        if self._rhand_pos_traj is not None:
+            self.rhand_pos_buffer = (1.0 - blend) * self._rhand_pos_traj[idx] + blend * self._rhand_pos_traj[idx + 1]
+        if self._rhand_quat_traj is not None:
+            self.rhand_quat_buffer = self._slerp_batch(
+                self._rhand_quat_traj[idx], self._rhand_quat_traj[idx + 1], blend.squeeze(-1)
+            )
+
+    @staticmethod
+    def _slerp_batch(q0: torch.Tensor, q1: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Batch quaternion SLERP. q0, q1: (N, 4) xyzw, t: (N,)."""
+        dot = (q0 * q1).sum(dim=-1, keepdim=True)
+        q1 = torch.where(dot < 0, -q1, q1)
+        dot = dot.abs().clamp(max=1.0 - 1e-6)
+        omega = torch.acos(dot)
+        sin_omega = torch.sin(omega)
+        t_ = t.unsqueeze(-1)
+        near_zero = sin_omega.abs() < 1e-6
+        s0 = torch.where(near_zero, 1.0 - t_, torch.sin((1.0 - t_) * omega) / sin_omega)
+        s1 = torch.where(near_zero, t_, torch.sin(t_ * omega) / sin_omega)
+        result = s0 * q0 + s1 * q1
+        return result / (result.norm(dim=-1, keepdim=True) + 1e-8)
 
     def get_joint_index(self, joint_name: str) -> int:
         if joint_name not in self.joint_names:

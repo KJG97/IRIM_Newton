@@ -1,4 +1,4 @@
 # Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Residual RL removed; action uses isaaclab RelativeJointPositionActionCfg.
+from .residual_joint_action_cfg import *  # noqa: F401, F403

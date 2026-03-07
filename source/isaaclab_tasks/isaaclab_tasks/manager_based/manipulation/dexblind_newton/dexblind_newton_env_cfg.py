@@ -7,65 +7,43 @@ from __future__ import annotations
 
 from dataclasses import MISSING
 from pathlib import Path
-
-import torch
-import warp as wp
-
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
-from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnvCfg, ViewerCfg
+from isaaclab.envs import ManagerBasedRLEnvCfg, ViewerCfg
+from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
-from isaaclab.sim._impl.newton_manager import NewtonManager
 from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
 from isaaclab.sim._impl.solvers_cfg import MJWarpSolverCfg
 from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.noise import GaussianNoiseCfg
+from isaaclab.visualizers import NewtonVisualizerCfg
+from isaaclab.visualizers.newton_visualizer_cfg import GoalMarkerCfg
 
-from newton.solvers import SolverNotifyFlags
-
-from isaaclab.envs.mdp.actions import actions_cfg as mdp_actions_cfg
 from isaaclab_tasks.direct.allex.allex_env_cfg import ALLEX_MIMIC_SPEC
 
 from . import mdp
+from .utils import randomize_object_pose_xy_yaw, set_shape_friction
 
 
-def set_shape_friction(
-    env: ManagerBasedEnv,
-    env_ids: torch.Tensor | None,
-    asset_cfg: SceneEntityCfg,
-    mu: float = 1.0,
-):
-    """Set Newton shape friction (mu) for all shapes of an asset."""
-    asset = env.scene[asset_cfg.name]
-    current_mu = wp.to_torch(
-        asset.root_view.get_attribute("shape_material_mu", asset.root_newton_model)
-    ).clone()
-    if env_ids is None:
-        current_mu[:] = mu
-    else:
-        current_mu[env_ids] = mu
-    mask = torch.zeros(env.scene.num_envs, dtype=torch.bool, device=env.device)
-    if env_ids is None:
-        mask[:] = True
-    else:
-        mask[env_ids] = True
-    asset.root_view.set_attribute(
-        "shape_material_mu", asset.root_newton_model, wp.from_torch(current_mu), mask=mask
-    )
-    NewtonManager._solver.notify_model_changed(SolverNotifyFlags.SHAPE_PROPERTIES)
 
-NUM_ENVS = 2
 
-# Right arm + hand (18 joints): arm 7 + hand 11, Roll excluded. Single source for obs/action.
-RIGHT_ARM_HAND_JOINT_NAMES = [
+NUM_ENVS = 4096
+
+# Arm-only joints (7)
+_ARM_JOINT_NAMES = [
     "R_Shoulder_Pitch_Joint", "R_Shoulder_Roll_Joint", "R_Shoulder_Yaw_Joint",
     "R_Elbow_Joint", "R_Wrist_Yaw_Joint", "R_Wrist_Roll_Joint", "R_Wrist_Pitch_Joint",
+]
+
+# Hand joints (11, Roll excluded)
+_HAND_JOINT_NAMES = [
     "R_Thumb_Yaw_Joint", "R_Thumb_CMC_Joint", "R_Thumb_MCP_Joint",
     "R_Index_MCP_Joint", "R_Index_PIP_Joint",
     "R_Middle_MCP_Joint", "R_Middle_PIP_Joint",
@@ -73,11 +51,26 @@ RIGHT_ARM_HAND_JOINT_NAMES = [
     "R_Little_MCP_Joint", "R_Little_PIP_Joint",
 ]
 
+# Right arm + hand (18 joints): arm 7 + hand 11, Roll excluded. Single source for obs/action.
+RIGHT_ARM_HAND_JOINT_NAMES = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES
+
+# Hand joints with Roll (15): Roll joints included for torque sensing.
+_HAND_JOINT_NAMES_WITH_ROLL = [
+    "R_Thumb_Yaw_Joint", "R_Thumb_CMC_Joint", "R_Thumb_MCP_Joint",
+    "R_Index_Roll_Joint", "R_Index_MCP_Joint", "R_Index_PIP_Joint",
+    "R_Middle_Roll_Joint", "R_Middle_MCP_Joint", "R_Middle_PIP_Joint",
+    "R_Ring_Roll_Joint", "R_Ring_MCP_Joint", "R_Ring_PIP_Joint",
+    "R_Little_Roll_Joint", "R_Little_MCP_Joint", "R_Little_PIP_Joint",
+]
+
+# Arm + hand with Roll (22 joints): for torque observation.
+RIGHT_ARM_HAND_JOINT_NAMES_TORQUE = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES_WITH_ROLL
+
 DEXBLIND_NEWTON_SOLVER_CFG = MJWarpSolverCfg(
     solver="newton",
     integrator="implicit",
-    njmax=600,
-    nconmax=6000,
+    nconmax_margin=100,
+    njmax_multiply=2.0,
     impratio=10.0,
     cone="elliptic",
     update_data_interval=2,
@@ -97,7 +90,7 @@ class SceneCfg(InteractiveSceneCfg):
             usd_path=str(Path(__file__).resolve().parents[5] / "isaaclab_assets" / "object" / "Hammer.usd"),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=False, disable_gravity=False),
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=(0.65, -0.1, 0.95), rot=(0.0, 1.0, 0.0, 0.0)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=(0.55, -0.1, 0.9), rot=(0.0, 1.0, 0.0, 0.0)),
         actuators={},
         articulation_root_prim_path="",
     )
@@ -124,20 +117,26 @@ class SceneCfg(InteractiveSceneCfg):
         collision_group=-1,
     )
 
-    sky_light = AssetBaseCfg(
-        prim_path="/World/skyLight",
-        spawn=sim_utils.DomeLightCfg(
-            intensity=750.0,
-            texture_file=f"{ISAAC_NUCLEUS_DIR}/Materials/Textures/Skies/PolyHaven/kloofendal_43d_clear_puresky_4k.hdr",
-        ),
-    )
-
 
 @configclass
 class SceneCfgNewton(SceneCfg):
     replicate_physics: bool = True
     clone_in_fabric: bool = True
     newton_replicate_kwargs: dict | None = None
+
+
+@configclass
+class CommandsCfg:
+    """Reference trajectory for tracking reward (action is still RelativeJointPosition)."""
+
+    reference_trajectory = mdp.ReferenceTrajectoryCommandCfg(
+        trajectory_file="Hammer_Hammer_RL_Trajectory.npz",
+        loop=False,
+        loop_start_time=None,
+        space="joint",
+        resampling_time_range=(60.0, 60.0),
+        playback_speed=1.0,
+    )
 
 
 @configclass
@@ -154,6 +153,119 @@ class ObservationsCfg:
         joint_pos = ObsTerm(
             func=mdp.joint_pos,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=RIGHT_ARM_HAND_JOINT_NAMES)},
+            noise=GaussianNoiseCfg(
+                mean=0.0, 
+                std=0.01,
+            ),
+        )
+
+        reference_joint_pos = ObsTerm(
+            func=mdp.reference_joint_pos,
+            params={
+                "command_name": "reference_trajectory",
+                "asset_cfg": SceneEntityCfg("robot", joint_names=RIGHT_ARM_HAND_JOINT_NAMES),
+                "joint_names": RIGHT_ARM_HAND_JOINT_NAMES,
+            },
+        )
+
+        right_hand_joint_torque = ObsTerm(
+            func=mdp.joint_applied_torque,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=RIGHT_ARM_HAND_JOINT_NAMES_TORQUE,
+                    preserve_order=True,
+                ),
+            },
+            noise=GaussianNoiseCfg(
+                mean=0.0, 
+                std=0.1,
+            ),
+        )
+
+        right_hand_relative_pose = ObsTerm(
+            func=mdp.right_hand_relative_pose,
+            params={"robot_cfg": SceneEntityCfg("robot")},
+            noise=GaussianNoiseCfg(
+                mean=0.0,
+                std=0.01,
+            ),
+        )
+
+        def __post_init__(self):
+            self.concatenate_terms = True
+            self.enable_corruption = True
+
+    @configclass
+    class PrivilegedObsCfg(ObsGroup):
+        """Privileged state for Asymmetric Critic (SimToolReal Appendix D.4).
+
+        Contains all proprio terms (noise-free) plus additional privileged
+        signals: ground-truth velocities, progress features, reward signals.
+        """
+
+        # --- proprio terms (clean, no noise) ---
+        joint_pos = ObsTerm(
+            func=mdp.joint_pos,
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=RIGHT_ARM_HAND_JOINT_NAMES)},
+        )
+        reference_joint_pos = ObsTerm(
+            func=mdp.reference_joint_pos,
+            params={
+                "command_name": "reference_trajectory",
+                "asset_cfg": SceneEntityCfg("robot", joint_names=RIGHT_ARM_HAND_JOINT_NAMES),
+                "joint_names": RIGHT_ARM_HAND_JOINT_NAMES,
+            },
+        )
+        right_hand_joint_torque = ObsTerm(
+            func=mdp.joint_applied_torque,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    joint_names=RIGHT_ARM_HAND_JOINT_NAMES_TORQUE,
+                    preserve_order=True,
+                ),
+            },
+        )
+        right_hand_relative_pose = ObsTerm(
+            func=mdp.right_hand_relative_pose,
+            params={"robot_cfg": SceneEntityCfg("robot")},
+        )
+        hammer_relative_pose = ObsTerm(
+            func=mdp.hammer_relative_pose,
+            params={"hammer_cfg": SceneEntityCfg("hammer")},
+        )
+
+        # --- privileged-only signals ---
+        object_lin_vel = ObsTerm(
+            func=mdp.object_lin_vel,
+            params={"asset_cfg": SceneEntityCfg("hammer")},
+        )
+        object_ang_vel = ObsTerm(
+            func=mdp.object_ang_vel,
+            params={"asset_cfg": SceneEntityCfg("hammer")},
+        )
+        palm_lin_vel = ObsTerm(
+            func=mdp.palm_lin_vel,
+            params={"body_name": "Right_Hand_base"},
+        )
+        palm_ang_vel = ObsTerm(
+            func=mdp.palm_ang_vel,
+            params={"body_name": "Right_Hand_base"},
+        )
+        min_fingertip_object_distance = ObsTerm(
+            func=mdp.min_fingertip_object_distance,
+            params={"asset_cfg": SceneEntityCfg("hammer")},
+        )
+        episode_step_count = ObsTerm(func=mdp.episode_step_count)
+        object_is_grasped = ObsTerm(
+            func=mdp.object_is_grasped,
+            params={"asset_cfg": SceneEntityCfg("hammer"), "lift_threshold": 0.91},
+        )
+        instantaneous_reward = ObsTerm(func=mdp.instantaneous_reward)
+        cumulative_successes = ObsTerm(
+            func=mdp.cumulative_successes,
+            params={"asset_cfg": SceneEntityCfg("hammer"), "lift_threshold": 0.91},
         )
 
         def __post_init__(self):
@@ -161,46 +273,178 @@ class ObservationsCfg:
 
     policy: PolicyCfg = PolicyCfg()
     proprio: ProprioObsCfg = ProprioObsCfg()
+    privileged: PrivilegedObsCfg = PrivilegedObsCfg()
 
 
 @configclass
 class ActionsCfg:
-    joint_pos = mdp_actions_cfg.RelativeJointPositionActionCfg(
+    """Relative joint position: target = q_current + action * scale."""
+
+    action = mdp.RelativeJointPositionActionCfg(
         asset_name="robot",
         joint_names=RIGHT_ARM_HAND_JOINT_NAMES,
         preserve_order=True,
-        scale=0.1,
+        scale=0.2,
+        use_zero_offset=True,
     )
 
 
 @configclass
 class EventCfg:
-    hammer_friction = EventTerm(
-        func=set_shape_friction,
-        mode="startup",
+    hammer_scale_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass_newton,
+        mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("hammer"),
-            "mu": 1.0,
+            "mass_distribution_params": (0.8, 1.6),
+            "operation": "scale",
         },
     )
-    table_friction = EventTerm(
+    hammer_friction = EventTerm(
         func=set_shape_friction,
-        mode="startup",
+        mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("table"),
-            "mu": 1.0,
+            "asset_cfg": SceneEntityCfg("hammer"),
+            "mu_range": (0.3, 0.5),
+        },
+    )
+    reset_hammer = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("hammer"),
+            "pose_range": {"x": [-0.03, 0.03], "y": [-0.03, 0.03], "yaw": [-0.3, 0.3]},
+            "velocity_range": {},
+        },
+    )
+    hammer_force_when_lifted = EventTerm(
+        func=mdp.apply_hammer_force_when_lifted,
+        mode="interval",
+        interval_range_s=(0.1, 0.2),
+        params={
+            "asset_cfg": SceneEntityCfg("hammer"),
+            "force_range": (-4.0, 4.0),   # N, ~±7 m/s² for 0.55 kg
+            "torque_range": (-1.0, 1.0),  # Nm, moderate rotation
+            "height_threshold": 1.0,
+        },
+    )
+    reset_robot_height = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "pose_range": {"z": [-0.03, 0.03]},
+            "velocity_range": {},
         },
     )
 
 
 @configclass
 class RewardsCfg:
-    pass
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.01)
+    arm_joint_torque_penalty = RewTerm(
+        func=mdp.joint_torques_l2,
+        weight=-1.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_ARM_JOINT_NAMES)},
+    )
+    hand_joint_torque_penalty = RewTerm(
+        func=mdp.joint_torques_l2,
+        weight=-1.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_HAND_JOINT_NAMES)},
+    )
+    arm_joint_vel_penalty = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_ARM_JOINT_NAMES)},
+    )
+    hand_joint_vel_penalty = RewTerm(
+        func=mdp.joint_vel_l2,
+        weight=-1.0e-4,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=_HAND_JOINT_NAMES)},
+    )
+
+    hammer_lift = RewTerm(
+        func=mdp.hammer_lift_reward,
+        weight=1.5,
+        params={"asset_cfg": SceneEntityCfg("hammer"), "threshold": 0.91},
+    )
+
+    hammer_goal_proximity = RewTerm(
+        func=mdp.hammer_goal_proximity_reward,
+        weight=2.0,
+        params={
+            "hammer_cfg": SceneEntityCfg("hammer"),
+            "goal_pos": (0.65, -0.2, 1.2),
+            "goal_rot": (0.0, -0.70711, -0.70711, 0.0),
+            "pos_std": 0.05,
+            "rot_std": 0.2,
+            "pos_weight": 0.6,
+            "rot_weight": 0.4,
+            "lift_threshold": 0.91,
+        },
+    )
+
+    reference_trajectory_hand_tracking = RewTerm(
+        func=mdp.reference_trajectory_tracking_reward,
+        weight=0.5,
+        params={
+            "command_name": "reference_trajectory",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=_HAND_JOINT_NAMES),
+            "joint_names": _HAND_JOINT_NAMES,
+            "joint_std": 0.2,
+        },
+    )
+
+    reference_trajectory_arm_tracking = RewTerm(
+        func=mdp.reference_trajectory_tracking_reward,
+        weight=0.5,
+        params={
+            "command_name": "reference_trajectory",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=_ARM_JOINT_NAMES),
+            "joint_names": _ARM_JOINT_NAMES,
+            "joint_std": 0.1,
+        },
+    )
+
+    grasp_point_proximity = RewTerm(
+        func=mdp.grasp_point_proximity_reward,
+        weight=0.1,
+        params={"hammer_cfg": SceneEntityCfg("hammer"), "pos_std": 0.10, "lift_threshold": 0.85},
+    )
+
+
+    hand_final_pose = RewTerm(
+        func=mdp.hand_final_pose_reward,
+        weight=1.0,
+        params={
+            "command_name": "reference_trajectory",
+            "asset_cfg": SceneEntityCfg("robot", joint_names=_HAND_JOINT_NAMES),
+            "hammer_cfg": SceneEntityCfg("hammer"),
+            "hand_joint_names": _HAND_JOINT_NAMES,
+            "goal_pos": (0.65, -0.2, 1.2),
+            "goal_rot": (0.0, -0.70711, -0.70711, 0.0),
+            "proximity_threshold": 0.7,
+            "joint_std": 0.1,
+        },
+    )
 
 
 @configclass
 class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    hammer_dropped = DoneTerm(
+        func=mdp.root_height_below_minimum,
+        params={"minimum_height": 0.8, "asset_cfg": SceneEntityCfg("hammer")},
+    )
+
+
+@configclass
+class CurriculumCfg:
+    """Curriculum schedules:
+
+    1. trajectory_tracking weight: 10 -> 1 over 0-5000 iterations
+    2. hammer randomize_scale: 0 -> 1 over 500-6000 iterations (commented out)
+    """
 
 
 @configclass
@@ -209,14 +453,49 @@ class DexblindNewtonLiftEnvCfg(ManagerBasedRLEnvCfg):
 
     scene: SceneCfgNewton = SceneCfgNewton(
         num_envs=NUM_ENVS,
-        env_spacing=3.0,
+        env_spacing=2.0,
         newton_replicate_kwargs={
             "equality_constraints": list(ALLEX_MIMIC_SPEC),
             "simplify_meshes": {
-                "hammer": ("coacd", {"threshold": 0.15}),
-                "table": "bounding_box",
+                "hammer": ("coacd", {"threshold": 0.1}),
                 "*": "convex_hull",
             },
+            "load_visual_shapes": False,
+            "disable_collision_bodies": [
+                "Waist_Base", "Waist_Yaw", "Waist_Pitch_Back",
+                "Waist_Pitch_Lower", "Waist_Pitch_Upper",
+                "Neck_Pitch", "Neck_Yaw", "Camera_Body",
+            ],
+            "disable_collision_shapes": [
+                "ALLEX_Right_Shoulder_Yaw_Frame_Collision_1",
+                "ALLEX_Right_Shoulder_Yaw_Frame_Collision_2",
+                "ALLEX_Right_Upperarm_Cover_Collision1",
+                "ALLEX_Right_Upperarm_Cover_Collision2",
+                "ALLEX_Right_Upperarm_Cover_Collision3",
+                "ALLEX_Right_Elbow_Frame",
+                "ALLEX_Right_Forearm_Base_Cover",
+                "ALLEX_Right_Forearm_Lower_Cover",
+                "ALLEX_Right_Forearm_Middle_Frame",
+                "ALLEX_Right_Forearm_Cover",
+                
+                "ALLEX_Hand_Proximal_Frame2",
+                "ALLEX_Hand_Proximal_Cover",
+                "ALLEX_Hand_Proximal_Pad",
+                "ALLEX_Hand_Middle_Frame2",
+                "ALLEX_Hand_Middle_Pad",
+                "ALLEX_Hand_Distal_Frame1",
+                "ALLEX_Right_Hand_Thumb_Proximal_Cover",
+                "ALLEX_Right_Hand_Thumb_Proximal_Pad",
+                "ALLEX_Right_Hand_Thumb_Proximal_Link1",
+                "ALLEX_Right_Hand_Thumb_Proximal_Link2",
+                "ALLEX_Right_Hand_Thumb_Middle_Pad",
+                "ALLEX_Right_Hand_Thumb_Middle_Link",
+                "ALLEX_Right_Hand_Thumb_Distal_Frame",
+            ],
+            "lock_joints": [
+                "Waist_Yaw_Joint",
+                "Waist_Pitch_Lower_Joint",
+            ],
         },
     )
 
@@ -224,25 +503,36 @@ class DexblindNewtonLiftEnvCfg(ManagerBasedRLEnvCfg):
         dt=1 / 100,
         newton_cfg=NewtonCfg(
             solver_cfg=DEXBLIND_NEWTON_SOLVER_CFG,
-            num_substeps=2,
+            num_substeps=4,
             debug_mode=False,
             use_cuda_graph=True,
+        ),
+        visualizer_cfgs=NewtonVisualizerCfg(
+            goal_markers=[
+                GoalMarkerCfg(
+                    pos=(0.65, -0.2, 1.2),
+                    rot=(0.0, -0.70711, -0.70711, 0.0),
+                    scale=(1.0, 1.0, 1.0),
+                    color=(0.2, 0.85, 0.3),
+                    usd_path=str(Path(__file__).resolve().parents[5] / "isaaclab_assets" / "object" / "Hammer_goal_pose.usd"),
+                ),
+            ],
         ),
     )
 
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
-    commands: object | None = None
+    commands: CommandsCfg = CommandsCfg()
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
     events: EventCfg = EventCfg()
-    curriculum = None
+    curriculum: CurriculumCfg = CurriculumCfg()
 
     def __post_init__(self):
         super().__post_init__()
-        self.decimation = 2
+        self.decimation = 2      
         self.sim.render_interval = self.decimation
-        self.episode_length_s = 4.0
+        self.episode_length_s = 6.0
         self.is_finite_horizon = True
 
 

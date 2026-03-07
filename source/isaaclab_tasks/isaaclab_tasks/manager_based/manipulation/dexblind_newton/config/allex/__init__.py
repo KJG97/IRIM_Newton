@@ -7,9 +7,11 @@ import gymnasium as gym
 
 from . import agents
 
+_ENV_CLASS = "isaaclab_tasks.manager_based.manipulation.dexblind_newton.dexblind_newton_env:DexblindNewtonEnv"
+
 gym.register(
     id="Isaac-Dexblind-Newton-Allex-Lift-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=_ENV_CLASS,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.dexblind_newton_allex_env_cfg:DexblindNewtonAllexLiftEnvCfg",
@@ -19,7 +21,7 @@ gym.register(
 
 gym.register(
     id="Isaac-Dexblind-Newton-Allex-Lift-Play-v0",
-    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    entry_point=_ENV_CLASS,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.dexblind_newton_allex_env_cfg:DexblindNewtonAllexLiftEnvCfg_PLAY",
