@@ -344,6 +344,106 @@ def _approximate_meshes_per_asset(
         builder.approximate_meshes(method, keep_visual_shapes=True)
 
 
+def _disable_collision_for_bodies(
+    builder,
+    body_patterns: list[str],
+) -> None:
+    """Clear ``COLLIDE_SHAPES`` flag on shapes belonging to matched bodies.
+
+    For each shape in the builder, if the parent body's key contains any of the
+    given substrings, the shape's ``COLLIDE_SHAPES`` bit is cleared so it no
+    longer participates in broadphase collision detection.
+
+    Args:
+        builder: A Newton ``ModelBuilder``.
+        body_patterns: Substrings to match against ``body_key``.
+    """
+    import newton
+
+    collide_bit = int(newton.ShapeFlags.COLLIDE_SHAPES)
+    body_keys = builder.body_key
+    disabled = 0
+    for i in range(builder.shape_count):
+        body_idx = builder.shape_body[i]
+        if body_idx < 0:
+            continue
+        bkey = body_keys[body_idx]
+        if any(pat in bkey for pat in body_patterns):
+            builder.shape_flags[i] &= ~collide_bit
+            disabled += 1
+    if disabled:
+        import logging
+
+        logging.getLogger("isaaclab.cloner").info(
+            "disable_collision_bodies: cleared COLLIDE_SHAPES on %d shapes "
+            "(patterns: %s)", disabled, body_patterns,
+        )
+
+
+def _disable_collision_for_shapes(
+    builder,
+    shape_patterns: list[str],
+) -> None:
+    """Clear ``COLLIDE_SHAPES`` flag on shapes whose key matches any pattern.
+
+    Args:
+        builder: A Newton ``ModelBuilder``.
+        shape_patterns: Substrings to match against ``shape_key``.
+    """
+    import newton
+
+    collide_bit = int(newton.ShapeFlags.COLLIDE_SHAPES)
+    disabled = 0
+    for i in range(builder.shape_count):
+        if not (builder.shape_flags[i] & collide_bit):
+            continue
+        skey = builder.shape_key[i]
+        if any(pat in skey for pat in shape_patterns):
+            builder.shape_flags[i] &= ~collide_bit
+            disabled += 1
+    if disabled:
+        import logging
+
+        logging.getLogger("isaaclab.cloner").info(
+            "disable_collision_shapes: cleared COLLIDE_SHAPES on %d shapes "
+            "(patterns: %s)", disabled, shape_patterns,
+        )
+
+
+
+def _lock_joints(
+    builder,
+    joint_patterns: list[str],
+    eps: float = 1e-6,
+) -> None:
+    """Lock joints by clamping their limits to a near-zero range around the initial value.
+
+    MuJoCo requires ``range[0] < range[1]``, so we use a tiny epsilon gap
+    (``q0 - eps, q0 + eps``) instead of exact equality.
+
+    Args:
+        builder: A Newton ``ModelBuilder``.
+        joint_patterns: Substrings to match against ``joint_key``.
+        eps: Half-width of the allowed range (radians). Default 1e-6.
+    """
+    locked = 0
+    for i in range(builder.joint_count):
+        jkey = builder.joint_key[i]
+        if any(pat in jkey for pat in joint_patterns):
+            q_start = builder.joint_q_start[i]
+            q0 = builder.joint_q[q_start]
+            builder.joint_limit_lower[i] = q0 - eps
+            builder.joint_limit_upper[i] = q0 + eps
+            locked += 1
+    if locked:
+        import logging
+
+        logging.getLogger("isaaclab.cloner").info(
+            "lock_joints: locked %d joints at initial position (eps=%.1e, "
+            "patterns: %s)", locked, eps, joint_patterns,
+        )
+
+
 def newton_replicate(
     stage: Usd.Stage,
     sources: list[str],
@@ -355,6 +455,10 @@ def newton_replicate(
     up_axis: str = "Z",
     simplify_meshes: bool | str | dict[str, str | tuple[str, dict]] = True,
     equality_constraints: list[tuple[str, str, tuple[float, ...]]] | None = None,
+    load_visual_shapes: bool = True,
+    disable_collision_bodies: list[str] | None = None,
+    disable_collision_shapes: list[str] | None = None,
+    lock_joints: list[str] | None = None,
 ):
     """Replicate prims into a Newton ``ModelBuilder`` using a per-source mapping.
 
@@ -372,6 +476,18 @@ def newton_replicate(
         equality_constraints: Optional list of (mimic_joint_name, driver_joint_name, (c0,c1,c2,c3,c4))
             for Newton joint equality: q_mimic = c0 + c1*q_driver + c2*q_driver^2 + ... .
             Joint names are matched against builder.joint_key (exact or path suffix).
+        load_visual_shapes: If False, visual-only shapes are not loaded into the
+            prototype builder, reducing total shape count. Default True.
+        disable_collision_bodies: List of body-name substrings. Any shape whose
+            parent body key contains one of these substrings will have its
+            ``COLLIDE_SHAPES`` flag cleared, removing it from broadphase collision.
+            Useful for excluding torso/neck links that don't need to collide.
+        disable_collision_shapes: List of shape-name substrings. Any shape whose
+            key contains one of these substrings will have its ``COLLIDE_SHAPES``
+            flag cleared. Finer-grained than ``disable_collision_bodies``.
+        lock_joints: List of joint-name substrings. Matched joints have their
+            upper and lower limits set equal to the initial position, effectively
+            freezing them in place.
     """
     from newton import ModelBuilder, solvers
 
@@ -391,10 +507,16 @@ def newton_replicate(
     for src_path in sources:
         p = ModelBuilder(up_axis=up_axis)
         solvers.SolverMuJoCo.register_custom_attributes(p)
-        p.add_usd(stage, root_path=src_path, load_visual_shapes=True,
+        p.add_usd(stage, root_path=src_path, load_visual_shapes=load_visual_shapes,
                   skip_mesh_approximation=bool(simplify_meshes))
         if simplify_meshes:
             _approximate_meshes_per_asset(p, simplify_meshes)
+        if disable_collision_bodies:
+            _disable_collision_for_bodies(p, disable_collision_bodies)
+        if disable_collision_shapes:
+            _disable_collision_for_shapes(p, disable_collision_shapes)
+        if lock_joints:
+            _lock_joints(p, lock_joints)
         if equality_constraints:
             added = 0
             for mimic_name, driver_name, polycoef in equality_constraints:

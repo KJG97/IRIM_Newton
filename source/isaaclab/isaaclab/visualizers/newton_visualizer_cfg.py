@@ -5,9 +5,36 @@
 
 """Configuration for Newton OpenGL Visualizer."""
 
+from dataclasses import field
+
 from isaaclab.utils import configclass
 
 from .visualizer_cfg import VisualizerCfg
+
+
+@configclass
+class GoalMarkerCfg:
+    """A static visual marker rendered by the Newton visualizer (no physics).
+
+    If ``usd_path`` is set the mesh geometry is loaded from the USD file;
+    otherwise a simple box with the given ``scale`` (half-extents) is drawn.
+    """
+
+    pos: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Position (x, y, z) in world frame."""
+
+    rot: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
+    """Quaternion (w, x, y, z)."""
+
+    scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    """Instance scale applied to the mesh (or half-extents when no USD)."""
+
+    color: tuple[float, float, float] = (0.2, 0.85, 0.3)
+    """RGB color [0, 1]."""
+
+    usd_path: str | None = None
+    """Optional path to a USD file. The first ``UsdGeom.Mesh`` prim found
+    in the file is used as the visual geometry."""
 
 
 @configclass
@@ -27,16 +54,16 @@ class NewtonVisualizerCfg(VisualizerCfg):
     visualizer_type: str = "newton"
     """Type identifier for Newton visualizer."""
 
-    window_width: int = 1920
+    window_width: int = 3000
     """Window width in pixels."""
 
-    window_height: int = 1080
+    window_height: int = 2000
     """Window height in pixels."""
 
-    font_scale: float = 3.0
+    font_scale: float = 2.5
     """ImGui font scale factor (e.g. 1.2 = 20% larger). Applied to all UI text."""
 
-    panel_initial_width: int = 600
+    panel_initial_width: int = 500
     """Initial width of the left control panel in pixels. Applied once at startup each run; panel is resizable at runtime."""
 
     update_frequency: int = 1
@@ -57,6 +84,9 @@ class NewtonVisualizerCfg(VisualizerCfg):
     show_collision: bool = False
     """Show collision shapes (e.g. convex hulls) for collision-enabled bodies. Toggle in UI at runtime."""
 
+    show_visual: bool = True
+    """Show visual meshes (VISIBLE-flagged shapes). Disable to see only collision geometry. Toggle in UI at runtime."""
+
     enable_shadows: bool = True
     """Enable shadow rendering."""
 
@@ -74,3 +104,9 @@ class NewtonVisualizerCfg(VisualizerCfg):
 
     light_color: tuple[float, float, float] = (1.0, 1.0, 1.0)
     """Light color RGB [0,1]."""
+
+    goal_markers: list[GoalMarkerCfg] = field(default_factory=list)
+    """Static visual markers rendered as boxes (no physics). Each marker is
+    displayed at the given world-frame pose with the specified color.
+    Useful for showing goal poses without adding bodies to the physics scene.
+    """

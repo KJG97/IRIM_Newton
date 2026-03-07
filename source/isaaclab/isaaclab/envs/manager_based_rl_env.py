@@ -168,6 +168,21 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         Returns:
             A tuple containing the observations, rewards, resets (terminated and truncated) and extras.
         """
+        # NaN/Inf action → zero out to prevent physics explosion
+        bad_action_mask = torch.isnan(action) | torch.isinf(action)
+        if bad_action_mask.any():
+            bad_env_mask = bad_action_mask.any(dim=-1)
+            n_bad = bad_env_mask.sum().item()
+            if not hasattr(self, "_nan_action_logged") or self.common_step_counter > self._nan_action_logged:
+                self._nan_action_logged = self.common_step_counter
+                print("\n\n" + "@" * 80)
+                print("@" * 80)
+                print(f"@@@ [NaN GUARD] ACTION NaN/Inf in {n_bad} envs at step {self.common_step_counter}")
+                print(f"@@@ Zeroing out bad actions to prevent physics explosion")
+                print("@" * 80)
+                print("@" * 80 + "\n")
+            action = torch.where(bad_action_mask, torch.zeros_like(action), action)
+
         # process actions
         self.action_manager.process_action(action.to(self.device))
 
@@ -206,6 +221,22 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         # -- reward computation
         self.reward_buf = self.reward_manager.compute(dt=self.step_dt)
 
+        # NaN/Inf reward → zero out + force terminate those envs
+        bad_reward_mask = torch.isnan(self.reward_buf) | torch.isinf(self.reward_buf)
+        if bad_reward_mask.any():
+            bad_env_ids = torch.where(bad_reward_mask)[0]
+            n_bad = bad_env_ids.numel()
+            print("\n\n" + "@" * 80)
+            print("@" * 80)
+            print(f"@@@ [NaN GUARD] REWARD NaN/Inf in {n_bad} envs at step {self.common_step_counter}")
+            print(f"@@@ Bad envs: {bad_env_ids.tolist()[:20]}")
+            print(f"@@@ Zeroing reward + forcing reset for these envs")
+            print("@" * 80)
+            print("@" * 80 + "\n")
+            self.reward_buf[bad_env_ids] = 0.0
+            self.reset_buf[bad_env_ids] = 1
+            self.reset_terminated[bad_env_ids] = True
+
         if len(self.recorder_manager.active_terms) > 0:
             # update observations for recording if needed
             self.obs_buf = self.observation_manager.compute()
@@ -235,6 +266,22 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
         # -- compute observations
         # note: done after reset to get the correct observations for reset envs
         self.obs_buf = self.observation_manager.compute(update_history=True)
+
+        # NaN/Inf obs → zero out to prevent network poisoning
+        for group_name, obs_tensor in self.obs_buf.items():
+            if isinstance(obs_tensor, torch.Tensor):
+                bad_mask = torch.isnan(obs_tensor) | torch.isinf(obs_tensor)
+                if bad_mask.any():
+                    n_bad = bad_mask.any(dim=-1).sum().item()
+                    if not hasattr(self, "_nan_obs_logged") or self.common_step_counter > self._nan_obs_logged:
+                        self._nan_obs_logged = self.common_step_counter
+                        print("\n\n" + "@" * 80)
+                        print("@" * 80)
+                        print(f"@@@ [NaN GUARD] OBS NaN/Inf in '{group_name}' ({n_bad} envs) at step {self.common_step_counter}")
+                        print(f"@@@ Zeroing out bad obs to prevent network poisoning")
+                        print("@" * 80)
+                        print("@" * 80 + "\n")
+                    self.obs_buf[group_name] = torch.where(bad_mask, torch.zeros_like(obs_tensor), obs_tensor)
 
         # return observations, rewards, resets and extras
         return self.obs_buf, self.reward_buf, self.reset_terminated, self.reset_time_outs, self.extras

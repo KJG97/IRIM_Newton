@@ -23,6 +23,57 @@ from isaaclab.utils.timer import Timer
 # Newton이 spec.option.jacobian = mjJAC_AUTO 로 빌드하면 nv>32일 때 sparse가 되어
 # mujoco_warp put_data에서 mjd.flexedge_J_rownnz 등 미지원 속성 참조로 오류 발생.
 # 모델을 처음부터 dense로 빌드하도록 mjJAC_AUTO를 mjJAC_DENSE로 취급하게 패치.
+def _create_mujoco_solver_with_auto_limits(
+    model: "Model",
+    solver_cfg: dict,
+    nconmax_margin: int,
+    njmax_multiply: float,
+) -> "SolverMuJoCo":
+    """Create a SolverMuJoCo with nconmax/njmax auto-computed from the initial mj_data.
+
+    Wraps ``SolverMuJoCo._convert_to_mjc`` so that once the MuJoCo model is
+    compiled and ``mj_data.ncon`` / ``mj_data.nefc`` are known, we derive safe
+    buffer sizes instead of using the bare initial values.
+    """
+    original_convert = SolverMuJoCo._convert_to_mjc
+
+    auto_nconmax = solver_cfg.get("nconmax") is None
+    auto_njmax = solver_cfg.get("njmax") is None
+
+    def _patched_convert(self, *args, **kwargs):
+        import mujoco_warp
+
+        original_put_data = mujoco_warp.put_data
+
+        def _patched_put_data(mj_model, mj_data, *, nworld, nconmax, njmax):
+            if auto_nconmax:
+                computed_nconmax = int(mj_data.ncon * 1.0) + nconmax_margin
+                nconmax = max(nconmax, computed_nconmax)
+            if auto_njmax:
+                computed_njmax = int(nconmax * njmax_multiply)
+                njmax = max(njmax, computed_njmax)
+            print(
+                f"[INFO] Auto-computed MuJoCo buffer sizes: "
+                f"nconmax={nconmax} (mj_data.ncon={mj_data.ncon}, margin={nconmax_margin}), "
+                f"njmax={njmax} (mj_data.nefc={mj_data.nefc}, multiply={njmax_multiply})"
+            )
+            return original_put_data(mj_model, mj_data, nworld=nworld, nconmax=nconmax, njmax=njmax)
+
+        mujoco_warp.put_data = _patched_put_data
+        try:
+            result = original_convert(self, *args, **kwargs)
+        finally:
+            mujoco_warp.put_data = original_put_data
+        return result
+
+    SolverMuJoCo._convert_to_mjc = _patched_convert
+    try:
+        solver = SolverMuJoCo(model, **solver_cfg)
+    finally:
+        SolverMuJoCo._convert_to_mjc = original_convert
+    return solver
+
+
 def _apply_newton_dense_jacobian_patch() -> None:
     try:
         import mujoco
@@ -401,11 +452,21 @@ class NewtonManager:
     def _get_solver(cls, model: Model, solver_cfg: dict) -> SolverBase:
         NewtonManager._solver_type = solver_cfg.pop("solver_type")
         mj_data_memory = solver_cfg.pop("mj_data_memory", None)
+        nconmax_margin = solver_cfg.pop("nconmax_margin", 100)
+        njmax_multiply = solver_cfg.pop("njmax_multiply", 2.0)
 
         if NewtonManager._solver_type == "mujoco_warp":
             if mj_data_memory is not None:
                 _apply_mj_spec_memory_patch(mj_data_memory)
-            return SolverMuJoCo(model, **solver_cfg)
+
+            auto_compute = solver_cfg.get("njmax") is None or solver_cfg.get("nconmax") is None
+            if auto_compute:
+                solver = _create_mujoco_solver_with_auto_limits(
+                    model, solver_cfg, nconmax_margin, njmax_multiply,
+                )
+            else:
+                solver = SolverMuJoCo(model, **solver_cfg)
+            return solver
         elif NewtonManager._solver_type == "xpbd":
             return SolverXPBD(model, **solver_cfg)
         elif NewtonManager._solver_type == "featherstone":

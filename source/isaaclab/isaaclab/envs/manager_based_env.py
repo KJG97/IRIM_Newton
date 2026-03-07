@@ -318,7 +318,10 @@ class ManagerBasedEnv:
 
         """
         # prepare the managers
-        # -- event manager (we print it here to make the logging consistent)
+        # -- event manager: resolve class-based terms that were deferred because
+        #    the manager was created before the simulation started playing.
+        if not self.event_manager._is_scene_entities_resolved:
+            self.event_manager._resolve_terms_callback(event=None)
         print("[INFO] Event Manager: ", self.event_manager)
         # -- recorder manager
         self.recorder_manager = RecorderManager(self.cfg.recorders, self)

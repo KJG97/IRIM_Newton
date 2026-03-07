@@ -16,7 +16,7 @@ import newton
 import warp as wp
 from newton.viewer import ViewerGL
 
-from .newton_visualizer_cfg import NewtonVisualizerCfg
+from .newton_visualizer_cfg import GoalMarkerCfg, NewtonVisualizerCfg
 from .visualizer import Visualizer
 
 class NewtonViewerGL(ViewerGL):
@@ -34,6 +34,7 @@ class NewtonViewerGL(ViewerGL):
         self._metadata = metadata or {}
         self._fallback_draw_controls = False
         self._update_frequency = update_frequency
+        self.show_visual: bool = True
         # Set by NewtonVisualizer from cfg after creation
         self._font_scale: float = 1.0
         self._panel_initial_width: int = 300
@@ -96,11 +97,15 @@ class NewtonViewerGL(ViewerGL):
         super().on_key_press(symbol, modifiers)
 
     def _should_show_shape(self, flags: int, is_static: bool) -> bool:
-        """Show Collision toggles collision-only shapes; shapes with VISIBLE flag always render."""
+        """Toggle visibility of collision-only and visual shapes independently."""
         is_collider = bool(flags & int(newton.ShapeFlags.COLLIDE_SHAPES))
         is_visible = bool(flags & int(newton.ShapeFlags.VISIBLE))
+        if is_collider and is_visible:
+            return self.show_collision or self.show_visual
         if is_collider and not is_visible:
             return self.show_collision
+        if is_visible and not is_collider:
+            return self.show_visual
         return super()._should_show_shape(flags, is_static)
 
     def _render_ui(self):
@@ -194,6 +199,12 @@ class NewtonViewerGL(ViewerGL):
                     changed, self.show_collision = imgui.checkbox("Show Collision", show_collision)
                     if imgui.is_item_hovered():
                         imgui.set_tooltip("Show collision shapes (e.g. convex hulls) for collision-enabled bodies")
+
+                    # Visual mesh visualization
+                    show_visual = self.show_visual
+                    changed, self.show_visual = imgui.checkbox("Show Visual", show_visual)
+                    if imgui.is_item_hovered():
+                        imgui.set_tooltip("Show visual meshes (VISIBLE-flagged shapes)")
 
             # Rendering Options section
             imgui.set_next_item_open(True, imgui.Cond_.appearing)
@@ -336,6 +347,7 @@ class NewtonVisualizer(Visualizer):
         self._viewer.show_springs = self.cfg.show_springs
         self._viewer.show_com = self.cfg.show_com
         self._viewer.show_collision = self.cfg.show_collision
+        self._viewer.show_visual = self.cfg.show_visual
 
         # Configure rendering options
         self._viewer.renderer.draw_shadows = self.cfg.enable_shadows
@@ -353,7 +365,117 @@ class NewtonVisualizer(Visualizer):
         if self._viewer.ui and self._viewer.ui.is_available:
             self._viewer.ui.imgui.get_style().font_scale_main = self.cfg.font_scale
 
+        # Compute env origins for goal markers (same grid as scene cloner)
+        num_envs = metadata["num_envs"] or 1
+        from isaaclab.cloner.cloner_utils import grid_transforms
+        env_origins, _ = grid_transforms(num_envs, spacing=2.0)  # matches SceneCfg.env_spacing
+
+        # Register goal-marker meshes and pre-build per-instance warp arrays
+        self._goal_marker_data = self._register_goal_markers(
+            self._viewer, self.cfg.goal_markers, env_origins.numpy(),
+        )
+
+        # Launch PySide6 debug panel alongside Newton viewer
+        from .debug_panel import ensure_debug_panel
+
+        self._debug_panel = ensure_debug_panel()
+
         self._is_initialized = True
+
+    @staticmethod
+    def _load_usd_mesh(usd_path: str) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        """Extract the first UsdGeom.Mesh from a USD file.
+
+        Returns (points_Nx3, indices_flat, normals_Nx3_or_None).
+        """
+        from pxr import Usd, UsdGeom  # noqa: PLC0415
+
+        stage = Usd.Stage.Open(usd_path)
+        mesh_prim = None
+        for prim in stage.Traverse():
+            if prim.IsA(UsdGeom.Mesh):
+                mesh_prim = prim
+                break
+        if mesh_prim is None:
+            raise RuntimeError(f"No UsdGeom.Mesh found in {usd_path}")
+
+        mesh = UsdGeom.Mesh(mesh_prim)
+        pts = np.array(mesh.GetPointsAttr().Get(), dtype=np.float32)
+        face_vertex_counts = np.array(mesh.GetFaceVertexCountsAttr().Get(), dtype=np.int32)
+        face_vertex_indices = np.array(mesh.GetFaceVertexIndicesAttr().Get(), dtype=np.int32)
+
+        # Triangulate (fan from first vertex of each face)
+        tri_indices: list[int] = []
+        offset = 0
+        for nv in face_vertex_counts:
+            for k in range(nv - 2):
+                tri_indices.extend([
+                    face_vertex_indices[offset],
+                    face_vertex_indices[offset + k + 1],
+                    face_vertex_indices[offset + k + 2],
+                ])
+            offset += nv
+        indices = np.array(tri_indices, dtype=np.uint32)
+
+        normals_attr = mesh.GetNormalsAttr().Get()
+        normals = np.array(normals_attr, dtype=np.float32) if normals_attr else None
+
+        return pts, indices, normals
+
+    @staticmethod
+    def _register_goal_markers(
+        viewer,
+        markers: list[GoalMarkerCfg],
+        env_origins: np.ndarray,
+    ) -> list[tuple[str, str, wp.array, wp.array, wp.array, wp.array]] | None:
+        """Register mesh prototypes and build per-instance arrays.
+
+        One instance per env is created for each marker, offset by the
+        corresponding env origin so the marker appears at the correct
+        relative position in every environment.
+
+        Args:
+            viewer: Newton viewer instance.
+            markers: Goal marker configurations (local-frame pose).
+            env_origins: (num_envs, 3) array of env world offsets.
+        """
+        if not markers:
+            return None
+
+        num_envs = len(env_origins)
+        result = []
+        for i, m in enumerate(markers):
+            mesh_name = f"/goal_mesh_{i}"
+            inst_name = f"/goal_marker_{i}"
+
+            if m.usd_path is not None:
+                pts, indices, normals = NewtonVisualizer._load_usd_mesh(m.usd_path)
+                wp_pts = wp.array(pts, dtype=wp.vec3)
+                wp_idx = wp.array(indices, dtype=wp.uint32)
+                wp_norms = wp.array(normals, dtype=wp.vec3) if normals is not None else None
+                viewer.log_mesh(mesh_name, wp_pts, wp_idx, normals=wp_norms, hidden=True)
+            else:
+                viewer.log_geo(
+                    mesh_name,
+                    newton.GeoType.BOX,
+                    m.scale,
+                    geo_thickness=0.0,
+                    geo_is_solid=True,
+                )
+
+            xf_list = []
+            for e in range(num_envs):
+                ox, oy, oz = float(env_origins[e, 0]), float(env_origins[e, 1]), float(env_origins[e, 2])
+                pos = (m.pos[0] + ox, m.pos[1] + oy, m.pos[2] + oz)
+                xf_list.append(wp.transform(pos, m.rot))
+
+            xforms = wp.array(xf_list, dtype=wp.transform)
+            scales = wp.array([wp.vec3(*m.scale)] * num_envs, dtype=wp.vec3)
+            colors = wp.array([wp.vec3(*m.color)] * num_envs, dtype=wp.vec3)
+            materials = wp.array([wp.vec4(0.0, 0.5, 0.0, 0.0)] * num_envs, dtype=wp.vec4)
+
+            result.append((inst_name, mesh_name, xforms, scales, colors, materials))
+        return result
 
     def step(self, dt: float, state: Any | None = None) -> None:
         """Update visualizer for one step."""
@@ -372,16 +494,47 @@ class NewtonVisualizer(Visualizer):
 
             self._state = NewtonManager._state_0
 
+        # Pump PySide6 event loop and update debug panel data
+        from .debug_panel import pump_qt_events
+
+        pump_qt_events()
+        if hasattr(self, "_debug_panel") and self._debug_panel is not None:
+            self._debug_panel.tick()
+
         # Only update visualizer at the specified frequency
         update_frequency = self._viewer._update_frequency if self._viewer else self._update_frequency
         if self._step_counter % update_frequency != 0:
             return
+
+        picking_on = (
+            hasattr(self, "_debug_panel")
+            and self._debug_panel is not None
+            and self._debug_panel.picking_enabled
+        )
+
+        if picking_on and self._state is not None:
+            picking = self._viewer.picking
+            ke = self._debug_panel.pick_stiffness
+            kd = self._debug_panel.pick_damping
+            picking.pick_stiffness = ke
+            picking.pick_damping = kd
+            import numpy as _np
+            ps = picking.pick_state.numpy()
+            ps[6] = ke
+            ps[7] = kd
+            picking.pick_state = wp.array(ps, dtype=float, device=picking.model.device)
+            self._viewer.apply_forces(self._state)
 
         with contextlib.suppress(Exception):
             if not self._viewer.is_paused():
                 self._viewer.begin_frame(self._sim_time)
                 if self._state is not None:
                     self._viewer.log_state(self._state)
+                if self._goal_marker_data:
+                    for inst_name, mesh_name, xforms, scales, colors, materials in self._goal_marker_data:
+                        self._viewer.log_instances(
+                            inst_name, mesh_name, xforms, scales, colors, materials,
+                        )
                 self._viewer.end_frame()
             else:
                 self._viewer._update()
@@ -390,6 +543,9 @@ class NewtonVisualizer(Visualizer):
         """Close visualizer and clean up resources."""
         if self._is_closed:
             return
+        if hasattr(self, "_debug_panel") and self._debug_panel is not None:
+            self._debug_panel.close()
+            self._debug_panel = None
         if self._viewer is not None:
             self._viewer = None
         self._is_closed = True

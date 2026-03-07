@@ -35,11 +35,32 @@ class MJWarpSolverCfg(NewtonSolverCfg):
     solver_type: str = "mujoco_warp"
     """Solver type. Can be "mujoco_warp"."""
 
-    njmax: int = 300
-    """Number of constraints per environment (world)."""
+    njmax: int | None = None
+    """Number of constraints per environment (world).
+
+    If None, the value is auto-computed from the initial MuJoCo data (``mj_data.nefc``)
+    with the ``njmax_multiply`` safety factor applied.
+    """
 
     nconmax: int | None = None
-    """Number of contact points per environment (world)."""
+    """Number of contact points per environment (world).
+
+    If None, the value is auto-computed from the initial MuJoCo data (``mj_data.ncon``)
+    with the ``nconmax_margin`` added.
+    """
+
+    nconmax_margin: int = 100
+    """Extra margin added to the auto-computed ``nconmax`` (i.e. ``mj_data.ncon + nconmax_margin``).
+
+    Only used when ``nconmax`` is None.
+    """
+
+    njmax_multiply: float = 2.0
+    """Safety multiplier applied to the auto-computed ``njmax``.
+
+    The effective value is ``nconmax * njmax_multiply``.
+    Only used when ``njmax`` is None.
+    """
 
     iterations: int = 100
     """Number of solver iterations."""
