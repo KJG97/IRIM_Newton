@@ -13,7 +13,7 @@ class AllexPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 50
     experiment_name = "allex_direct"
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=0.5,
+        init_noise_std=1.0,
         actor_obs_normalization=False,
         critic_obs_normalization=False,
         actor_hidden_dims=[256, 128, 64],
