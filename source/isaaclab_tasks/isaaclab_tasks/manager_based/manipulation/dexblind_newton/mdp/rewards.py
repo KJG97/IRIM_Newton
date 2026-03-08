@@ -1,7 +1,12 @@
 # Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Rewards for dexblind_newton."""
+"""Rewards for dexblind_newton.
+
+Only division-by-zero and acos domain protection (eps, clamp) are applied so that
+formula-induced NaN is avoided. No nan_to_num; if state is corrupted, NaN will
+propagate so the cause can be identified.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +22,9 @@ from .utils import root_pos_w_z, get_body_poses_batched
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+# Avoid 0/0 or division-by-zero when std params are (erroneously) zero.
+_EPS = 1e-6
 
 
 def hammer_goal_proximity_reward(
@@ -51,11 +59,13 @@ def hammer_goal_proximity_reward(
     g_quat = torch.tensor(goal_rot, dtype=torch.float32, device=dev).unsqueeze(0).expand(n, 4)
 
     pos_err = torch.norm(local_pos - g_pos, dim=-1)
-    pos_rew = torch.exp(-pos_err / pos_std)
+    safe_pos_std = max(pos_std, _EPS)
+    pos_rew = torch.exp(-pos_err / safe_pos_std)
 
-    dot = torch.sum(h_quat * g_quat, dim=-1).abs().clamp(max=1.0)
+    dot = torch.sum(h_quat * g_quat, dim=-1).abs().clamp(min=0.0, max=1.0)
     rot_err = torch.acos(dot)
-    rot_rew = torch.exp(-rot_err / rot_std)
+    safe_rot_std = max(rot_std, _EPS)
+    rot_rew = torch.exp(-rot_err / safe_rot_std)
 
     return (pos_weight * pos_rew + rot_weight * rot_rew) * lifted.float()
 
@@ -92,7 +102,8 @@ def grasp_point_proximity_reward(
     grasp_world_pos = hammer_pos + quat_apply(hammer_quat, offset)
 
     dist = torch.norm(hand_pos - grasp_world_pos, dim=-1)
-    return torch.exp(-dist / pos_std) * lifted.float()
+    safe_pos_std = max(pos_std, _EPS)
+    return torch.exp(-dist / safe_pos_std) * lifted.float()
 
 
 def hammer_lift_reward(
@@ -148,14 +159,14 @@ def reference_trajectory_tracking_reward(
     current_sub = current_full[:, robot_cols]  # (N, len(common))
 
     err = torch.abs(current_sub - ref_sub)
-    per_joint_rew = torch.exp(-err / joint_std)
+    safe_joint_std = max(joint_std, _EPS)
+    per_joint_rew = torch.exp(-err / safe_joint_std)
     rew = per_joint_rew.mean(dim=-1)
 
     if hammer_cfg is not None and lift_threshold is not None:
         lifted = root_pos_w_z(env, hammer_cfg) >= lift_threshold
         rew = rew * lifted.float()
     return rew
-
 
 
 def hand_final_pose_reward(
@@ -193,8 +204,8 @@ def hand_final_pose_reward(
     g_quat = torch.tensor(goal_rot, dtype=torch.float32, device=dev).unsqueeze(0)
 
     pos_err = torch.norm(local_pos - g_pos, dim=-1)
-    pos_score = torch.exp(-pos_err / 0.05)
-    dot = torch.sum(h_quat * g_quat, dim=-1).abs().clamp(max=1.0)
+    pos_score = torch.exp(-pos_err / max(0.05, _EPS))
+    dot = torch.sum(h_quat * g_quat, dim=-1).abs().clamp(min=0.0, max=1.0)
     rot_score = torch.exp(-torch.acos(dot) / 0.2)
     proximity = 0.5 * pos_score + 0.5 * rot_score
     gate = (proximity >= proximity_threshold).float()
@@ -224,7 +235,8 @@ def hand_final_pose_reward(
 
     # --- per-joint error → exp reward ---
     err = torch.abs(current - target)
-    per_joint_rew = torch.exp(-err / joint_std)
+    safe_joint_std = max(joint_std, _EPS)
+    per_joint_rew = torch.exp(-err / safe_joint_std)
     mean_rew = per_joint_rew.mean(dim=-1)  # (N,)
 
     return mean_rew * gate
