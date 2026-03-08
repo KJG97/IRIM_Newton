@@ -23,7 +23,7 @@ from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
 from isaaclab.sim._impl.solvers_cfg import MJWarpSolverCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import GaussianNoiseCfg
-from isaaclab.visualizers import NewtonVisualizerCfg
+from isaaclab.visualizers import NewtonVisualizerCfg, RerunVisualizerCfg
 from isaaclab.visualizers.newton_visualizer_cfg import GoalMarkerCfg
 
 from isaaclab_tasks.direct.allex.allex_env_cfg import ALLEX_MIMIC_SPEC
@@ -54,6 +54,9 @@ _HAND_JOINT_NAMES = [
 # Right arm + hand (18 joints): arm 7 + hand 11, Roll excluded. Single source for obs/action.
 RIGHT_ARM_HAND_JOINT_NAMES = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES
 
+_ARM_TORQUE_JOINT_NAMES = [
+    "R_Shoulder_Pitch_Joint", "R_Shoulder_Roll_Joint", "R_Shoulder_Yaw_Joint","R_Elbow_Joint",
+]
 # Hand joints with Roll (15): Roll joints included for torque sensing.
 _HAND_JOINT_NAMES_WITH_ROLL = [
     "R_Thumb_Yaw_Joint", "R_Thumb_CMC_Joint", "R_Thumb_MCP_Joint",
@@ -64,9 +67,8 @@ _HAND_JOINT_NAMES_WITH_ROLL = [
 ]
 
 # Arm + hand with Roll (22 joints): for torque observation.
-RIGHT_ARM_HAND_JOINT_NAMES_TORQUE = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES_WITH_ROLL
+RIGHT_ARM_HAND_JOINT_NAMES_TORQUE = _ARM_TORQUE_JOINT_NAMES + _HAND_JOINT_NAMES_WITH_ROLL
 
-TEMP_RIGHT_ARM_HAND_JOINT_NAMES = _ARM_JOINT_NAMES + _HAND_JOINT_NAMES
 
 DEXBLIND_NEWTON_SOLVER_CFG = MJWarpSolverCfg(
     solver="newton",
@@ -90,7 +92,6 @@ class SceneCfg(InteractiveSceneCfg):
         prim_path="/World/envs/env_.*/hammer",
         spawn=sim_utils.UsdFileCfg(
             usd_path=str(Path(__file__).resolve().parents[5] / "isaaclab_assets" / "object" / "Hammer.usd"),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=False, disable_gravity=False),
         ),
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.55, -0.1, 0.9), rot=(0.0, 1.0, 0.0, 0.0)),
         actuators={},
@@ -105,7 +106,7 @@ class SceneCfg(InteractiveSceneCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=True),
             visible=True
         ),
-        init_state=ArticulationCfg.InitialStateCfg(pos=(0.65, -0.1, 0.45), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=ArticulationCfg.InitialStateCfg(pos=(0.65, -0.1, 0.4425), rot=(1.0, 0.0, 0.0, 0.0)),
         actuators={},
         articulation_root_prim_path="",
     )
@@ -175,7 +176,7 @@ class ObservationsCfg:
             params={
                 "asset_cfg": SceneEntityCfg(
                     "robot",
-                    joint_names=TEMP_RIGHT_ARM_HAND_JOINT_NAMES,
+                    joint_names=RIGHT_ARM_HAND_JOINT_NAMES_TORQUE,
                     preserve_order=True,
                 ),
             },
@@ -322,12 +323,12 @@ class EventCfg:
     hammer_force_when_lifted = EventTerm(
         func=mdp.apply_hammer_force_when_lifted,
         mode="interval",
-        interval_range_s=(0.1, 0.2),
+        interval_range_s=(0.4, 0.5),
         params={
             "asset_cfg": SceneEntityCfg("hammer"),
-            "force_range": (-4.0, 4.0),   # N, ~±7 m/s² for 0.55 kg
-            "torque_range": (-1.0, 1.0),  # Nm, moderate rotation
-            "height_threshold": 1.0,
+            "force_range": (-3.0, 3.0),   # N, ~±7 m/s² for 0.55 kg
+            "torque_range": (-0.5, 0.5),  # Nm, moderate rotation
+            "height_threshold": 1.1,
         },
     )
     reset_robot_height = EventTerm(
@@ -438,6 +439,22 @@ class TerminationsCfg:
         func=mdp.root_height_below_minimum,
         params={"minimum_height": 0.8, "asset_cfg": SceneEntityCfg("hammer")},
     )
+    hammer_velocity_exceeded = DoneTerm(
+        func=mdp.hammer_velocity_exceeded,
+        params={
+            "asset_cfg": SceneEntityCfg("hammer"),
+            "max_lin_vel": 30.0,
+            "max_ang_vel": 50.0,
+        },
+    )
+    hammer_too_far_from_table = DoneTerm(
+        func=mdp.hammer_too_far_from_table,
+        params={
+            "hammer_cfg": SceneEntityCfg("hammer"),
+            "table_cfg": SceneEntityCfg("table"),
+            "max_distance": 1.0,
+        },
+    )
 
 
 @configclass
@@ -505,21 +522,27 @@ class DexblindNewtonLiftEnvCfg(ManagerBasedRLEnvCfg):
         dt=1 / 100,
         newton_cfg=NewtonCfg(
             solver_cfg=DEXBLIND_NEWTON_SOLVER_CFG,
-            num_substeps=4,
+            num_substeps=2,
             debug_mode=False,
             use_cuda_graph=True,
         ),
-        visualizer_cfgs=NewtonVisualizerCfg(
-            goal_markers=[
-                GoalMarkerCfg(
-                    pos=(0.65, -0.2, 1.2),
-                    rot=(0.0, -0.70711, -0.70711, 0.0),
-                    scale=(1.0, 1.0, 1.0),
-                    color=(0.2, 0.85, 0.3),
-                    usd_path=str(Path(__file__).resolve().parents[5] / "isaaclab_assets" / "object" / "Hammer_goal_pose.usd"),
-                ),
-            ],
-        ),
+        visualizer_cfgs=[
+            NewtonVisualizerCfg(
+                goal_markers=[
+                    GoalMarkerCfg(
+                        pos=(0.65, -0.2, 1.2),
+                        rot=(0.0, -0.70711, -0.70711, 0.0),
+                        scale=(1.0, 1.0, 1.0),
+                        color=(0.2, 0.85, 0.3),
+                        usd_path=str(Path(__file__).resolve().parents[5] / "isaaclab_assets" / "object" / "Hammer_goal_pose.usd"),
+                    ),
+                ],
+            ),
+            RerunVisualizerCfg(
+                record_to_rrd="logs/rsl_rl/record/training_record.rrd",
+                keep_historical_data=True,
+            ),
+        ],
     )
 
     observations: ObservationsCfg = ObservationsCfg()
