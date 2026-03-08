@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import gymnasium as gym
 import math
+
 import numpy as np
 import torch
+import warp as wp
+from collections import deque
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
@@ -75,6 +78,8 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
 
         # initialize the episode length buffer BEFORE loading the managers to use it in mdp functions.
         self.episode_length_buf = torch.zeros(cfg.scene.num_envs, device=cfg.sim.device, dtype=torch.long)
+        # 30-step hammer velocity history for NaN diagnosis
+        self._hammer_vel_deque = deque(maxlen=30)
 
         # initialize the base class to setup the scene.
         super().__init__(cfg=cfg)
@@ -210,6 +215,15 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
             # update buffers at sim dt
             self.scene.update(dt=self.physics_dt)
 
+        # Store hammer root velocities for NaN diagnosis (30-step history)
+        try:
+            hammer = self.scene["hammer"]
+            lin = wp.to_torch(hammer.data.root_lin_vel_w).clone()
+            ang = wp.to_torch(hammer.data.root_ang_vel_w).clone()
+            self._hammer_vel_deque.append({"lin_vel": lin, "ang_vel": ang})
+        except (KeyError, AttributeError):
+            pass
+
         # post-step:
         # -- update env counters (used for curriculum generation)
         self.episode_length_buf += 1  # step in current episode (per env)
@@ -275,10 +289,41 @@ class ManagerBasedRLEnv(ManagerBasedEnv, gym.Env):
                     n_bad = bad_mask.any(dim=-1).sum().item()
                     if not hasattr(self, "_nan_obs_logged") or self.common_step_counter > self._nan_obs_logged:
                         self._nan_obs_logged = self.common_step_counter
+                        bad_env_ids = bad_mask.any(dim=-1).nonzero(as_tuple=False).squeeze(-1)
                         print("\n\n" + "@" * 80)
                         print("@" * 80)
                         print(f"@@@ [NaN GUARD] OBS NaN/Inf in '{group_name}' ({n_bad} envs) at step {self.common_step_counter}")
-                        print(f"@@@ Zeroing out bad obs to prevent network poisoning")
+                        print(f"@@@ Bad env ids: {bad_env_ids.tolist()[:10]}")
+
+                        # Hammer-only diagnosis: current pose + 10-step vel history
+                        try:
+                            from isaaclab_tasks.manager_based.manipulation.dexblind_newton.mdp.utils import get_body_poses_batched
+                        except ImportError:
+                            get_body_poses_batched = None
+                        if get_body_poses_batched is not None:
+                            try:
+                                bpos, bquat = get_body_poses_batched("hammer", self.num_envs, self.device)
+                                for eid in bad_env_ids.flatten()[:5]:
+                                    eid_val = eid.item() if eid.dim() == 0 else int(eid)
+                                    p = bpos[eid].cpu().tolist()
+                                    q = bquat[eid].cpu().tolist()
+                                    print(f"@@@ [HAMMER] env {eid_val} current: pos={[f'{x:.4f}' for x in p]} quat={[f'{x:.4f}' for x in q]}")
+                            except Exception as e:
+                                print(f"@@@ [HAMMER] pose error: {e}")
+                        vel_deque = getattr(self, "_hammer_vel_deque", None)
+                        if vel_deque is not None and len(vel_deque) > 0:
+                            print("@@@ [HAMMER] 30-step history (lin_vel m/s, ang_vel rad/s) for bad envs:")
+                            for i, snap in enumerate(vel_deque):
+                                offset = len(vel_deque) - i
+                                for eid in bad_env_ids.flatten()[:5]:
+                                    eid_val = eid.item() if eid.dim() == 0 else int(eid)
+                                    lin = snap["lin_vel"][eid].cpu().tolist()
+                                    ang = snap["ang_vel"][eid].cpu().tolist()
+                                    print(f"@@@   t-{offset} env {eid_val}: lin_vel=[{lin[0]:.4f}, {lin[1]:.4f}, {lin[2]:.4f}] ang_vel=[{ang[0]:.4f}, {ang[1]:.4f}, {ang[2]:.4f}]")
+                        else:
+                            print("@@@ [HAMMER] No velocity history available.")
+
+                        print("@@@ [NaN GUARD] Stopping training for inspection.")
                         print("@" * 80)
                         print("@" * 80 + "\n")
                     self.obs_buf[group_name] = torch.where(bad_mask, torch.zeros_like(obs_tensor), obs_tensor)
