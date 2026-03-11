@@ -3,6 +3,9 @@
 
 """Minimal direct env config: ALLEX robot + ground only (Newton)."""
 
+from pathlib import Path
+
+import isaaclab.sim as sim_utils
 from isaaclab_assets.robots.allex import ALLEX_CFG, ALLEX_NO_LEFT_CFG
 
 from isaaclab.assets import ArticulationCfg
@@ -15,15 +18,18 @@ from isaaclab.sim.spawners.materials.physics_materials_cfg import RigidBodyMater
 from isaaclab.utils import configclass
 
 
-# ALLEX total DOF: USD/Newton articulation 실제 DOF 수와 일치해야 함 (현재 60).
-ALLEX_NUM_DOF = 60
-# ALLEX_newton_no_left.usd: 왼팔/왼손 제거. 목 2개 Fixed → Revolute 31 DOF (허리+오른팔+오른손, passive 포함).
-ALLEX_NO_LEFT_NUM_DOF = 31
-
+# -----------------------------------------------------------------------------
+# Environment / DOF
+# -----------------------------------------------------------------------------
 NUM_ENVS = 1
+ALLEX_NUM_DOF = 60  # Full: USD/Newton articulation DOF
+ALLEX_NO_LEFT_NUM_DOF = 31  # NoLeft: 왼팔/왼손 제거, 목 Fixed → Revolute, 허리+오른팔+오른손
 
-# Newton joint equality (mimic): (mimic_joint_name, driver_joint_name, (c0,c1,c2,c3,c4)) with q_mimic = c0 + c1*q_driver + ...
-# From allex_contact_sensor.xml <equality><joint ... polycoef="...">. Used by newton_replicate(equality_constraints=...).
+
+# -----------------------------------------------------------------------------
+# Mimic (joint equality) specs — newton_replicate(equality_constraints=...)
+# From allex_contact_sensor.xml <equality><joint ... polycoef="...">
+# -----------------------------------------------------------------------------
 ALLEX_MIMIC_SPEC: list[tuple[str, str, tuple[float, ...]]] = [
     ("Waist_Pitch_Upper_Joint", "Waist_Pitch_Lower_Joint", (0.0, -1.0, 0.0, 0.0, 0.0)),
     ("Waist_Pitch_Dummy_Joint", "Waist_Pitch_Lower_Joint", (0.0, 1.0, 0.0, 0.0, 0.0)),
@@ -33,8 +39,6 @@ ALLEX_MIMIC_SPEC: list[tuple[str, str, tuple[float, ...]]] = [
     ("R_Ring_DIP_Joint", "R_Ring_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
     ("R_Little_DIP_Joint", "R_Little_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
 ]
-
-# Full ALLEX (60 DOF): same as ALLEX_MIMIC_SPEC + left hand mimic (symmetric poly coefs).
 ALLEX_FULL_MIMIC_SPEC: list[tuple[str, str, tuple[float, ...]]] = list(ALLEX_MIMIC_SPEC) + [
     ("L_Thumb_IP_Joint", "L_Thumb_MCP_Joint", (-0.0015, 0.6651, 0.0186, 0.1224, -0.0696)),
     ("L_Index_DIP_Joint", "L_Index_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
@@ -43,26 +47,113 @@ ALLEX_FULL_MIMIC_SPEC: list[tuple[str, str, tuple[float, ...]]] = list(ALLEX_MIM
     ("L_Little_DIP_Joint", "L_Little_PIP_Joint", (-0.003849, 0.4269, 0.06589, 0.136, -0.04621)),
 ]
 
-# Newton solver 전용 설정. Full ALLEX(60 DOF, 295 shapes)는 mj_forward 시 mjData 스택 부족으로
-# mj_stackAlloc overflow 발생 → mj_data_memory로 arena+stack 크기 확대 필요.
+
+# -----------------------------------------------------------------------------
+# Newton solver (shared; Full ALLEX needs mj_data_memory for mj_stackAlloc)
+# -----------------------------------------------------------------------------
 ALLEX_SOLVER_CFG = MJWarpSolverCfg(
     solver="newton",
     integrator="implicit",
     njmax=600 * NUM_ENVS,
-    nconmax=6000,  # Full ALLEX ~295 shapes → broadphase needs ~5850
+    nconmax=6000,
     impratio=10.0,
     cone="elliptic",
     update_data_interval=2,
     iterations=100,
     ls_iterations=15,
     ls_parallel=True,
-    mj_data_memory=64 * 1024 * 1024,  # 64 MiB (Full ALLEX: MuJoCo requests >16 MiB for nefc/ncon)
+    mj_data_memory=64 * 1024 * 1024,
 )
 
 
+# -----------------------------------------------------------------------------
+# Scene replicate options (disable collision bodies/shapes, lock joints)
+# -----------------------------------------------------------------------------
+_ALLEX_DISABLE_COLLISION_BODIES = [
+    "Waist_Base", "Waist_Yaw", "Waist_Pitch_Back",
+    "Waist_Pitch_Lower", "Waist_Pitch_Upper",
+    "Neck_Pitch", "Neck_Yaw", "Camera_Body",
+]
+_ALLEX_DISABLE_COLLISION_SHAPES = [
+    "ALLEX_Right_Shoulder_Yaw_Frame_Collision_1",
+    "ALLEX_Right_Shoulder_Yaw_Frame_Collision_2",
+    "ALLEX_Right_Upperarm_Cover_Collision1",
+    "ALLEX_Right_Upperarm_Cover_Collision2",
+    "ALLEX_Right_Upperarm_Cover_Collision3",
+    "ALLEX_Right_Elbow_Frame",
+    "ALLEX_Right_Forearm_Base_Cover",
+    "ALLEX_Right_Forearm_Lower_Cover",
+    "ALLEX_Right_Forearm_Middle_Frame",
+    "ALLEX_Right_Forearm_Cover",
+    "ALLEX_Hand_Proximal_Frame2",
+    "ALLEX_Hand_Proximal_Cover",
+    "ALLEX_Hand_Proximal_Pad",
+    "ALLEX_Hand_Middle_Frame2",
+    "ALLEX_Hand_Middle_Pad",
+    "ALLEX_Hand_Distal_Frame1",
+    "ALLEX_Right_Hand_Thumb_Proximal_Cover",
+    "ALLEX_Right_Hand_Thumb_Proximal_Pad",
+    "ALLEX_Right_Hand_Thumb_Proximal_Link1",
+    "ALLEX_Right_Hand_Thumb_Proximal_Link2",
+    "ALLEX_Right_Hand_Thumb_Middle_Pad",
+    "ALLEX_Right_Hand_Thumb_Middle_Link",
+    "ALLEX_Right_Hand_Thumb_Distal_Frame",
+]
+_ALLEX_LOCK_JOINTS = ["Waist_Yaw_Joint", "Waist_Pitch_Lower_Joint"]
+
+
+def _newton_replicate_kwargs(equality_constraints: list) -> dict:
+    """Shared newton_replicate_kwargs for both Full and NoLeft."""
+    return {
+        "equality_constraints": equality_constraints,
+        "simplify_meshes": {"hammer": ("coacd", {"threshold": 0.1}), "*": "convex_hull"},
+        "load_visual_shapes": True,
+        "disable_collision_bodies": _ALLEX_DISABLE_COLLISION_BODIES,
+        "disable_collision_shapes": _ALLEX_DISABLE_COLLISION_SHAPES,
+        "lock_joints": _ALLEX_LOCK_JOINTS,
+    }
+
+
+# -----------------------------------------------------------------------------
+# NoLeft-only: hammer/table (same as dexblind_newton; added in _setup_scene)
+# -----------------------------------------------------------------------------
+def _hammer_usd_path() -> str:
+    return str(Path(__file__).resolve().parents[4] / "isaaclab_assets" / "object" / "Hammer.usd")
+
+
+_HAMMER_INIT_POS = (0.55, -0.1, 0.9)
+_HAMMER_INIT_ROT = (0.0, 1.0, 0.0, 0.0)
+_TABLE_SIZE = (0.4, 0.6, 0.885)
+_TABLE_INIT_POS = (0.65, -0.1, 0.4425)
+_TABLE_INIT_ROT = (1.0, 0.0, 0.0, 0.0)
+
+ALLEX_NOLEFT_HAMMER_CFG = ArticulationCfg(
+    prim_path="/World/envs/env_.*/hammer",
+    spawn=sim_utils.UsdFileCfg(usd_path=_hammer_usd_path()),
+    init_state=ArticulationCfg.InitialStateCfg(pos=_HAMMER_INIT_POS, rot=_HAMMER_INIT_ROT),
+    actuators={},
+    articulation_root_prim_path="",
+)
+ALLEX_NOLEFT_TABLE_CFG = ArticulationCfg(
+    prim_path="/World/envs/env_.*/table",
+    spawn=sim_utils.MeshCuboidCfg(
+        size=_TABLE_SIZE,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+        collision_props=sim_utils.CollisionPropertiesCfg(collision_enabled=True),
+        visible=True,
+    ),
+    init_state=ArticulationCfg.InitialStateCfg(pos=_TABLE_INIT_POS, rot=_TABLE_INIT_ROT),
+    actuators={},
+    articulation_root_prim_path="",
+)
+
+
+# -----------------------------------------------------------------------------
+# Env configs
+# -----------------------------------------------------------------------------
 @configclass
 class AllexEnvCfg(DirectRLEnvCfg):
-    """Minimal config: ALLEX on a plane with Newton (full 60 DOF: waist + both arms/hands). No objects, no task."""
+    """ALLEX on a plane with Newton (full 60 DOF: waist + both arms/hands). No objects."""
 
     episode_length_s = 30.0
     decimation = 2
@@ -71,7 +162,6 @@ class AllexEnvCfg(DirectRLEnvCfg):
     state_space = 0
 
     mimic_spec: list = ALLEX_FULL_MIMIC_SPEC
-    """(mimic_name, driver_name, (c0,c1,c2,c3,c4)) for env and joint_slider_agent."""
 
     solver_cfg = ALLEX_SOLVER_CFG
     newton_cfg = NewtonCfg(
@@ -95,45 +185,7 @@ class AllexEnvCfg(DirectRLEnvCfg):
         env_spacing=2.0,
         replicate_physics=True,
         clone_in_fabric=True,
-        newton_replicate_kwargs={
-            "equality_constraints": ALLEX_FULL_MIMIC_SPEC,
-            "simplify_meshes": {"*": "convex_hull"},
-            "load_visual_shapes": True,
-            "disable_collision_bodies": [
-                "Waist_Base", "Waist_Yaw", "Waist_Pitch_Back",
-                "Waist_Pitch_Lower", "Waist_Pitch_Upper",
-                "Neck_Pitch", "Neck_Yaw", "Camera_Body",
-            ],
-            "disable_collision_shapes": [
-                "ALLEX_Right_Shoulder_Yaw_Frame_Collision_1",
-                "ALLEX_Right_Shoulder_Yaw_Frame_Collision_2",
-                "ALLEX_Right_Upperarm_Cover_Collision1",
-                "ALLEX_Right_Upperarm_Cover_Collision2",
-                "ALLEX_Right_Upperarm_Cover_Collision3",
-                "ALLEX_Right_Elbow_Frame",
-                "ALLEX_Right_Forearm_Base_Cover",
-                "ALLEX_Right_Forearm_Lower_Cover",
-                "ALLEX_Right_Forearm_Middle_Frame",
-                "ALLEX_Right_Forearm_Cover",
-                "ALLEX_Hand_Proximal_Frame2",
-                "ALLEX_Hand_Proximal_Cover",
-                "ALLEX_Hand_Proximal_Pad",
-                "ALLEX_Hand_Middle_Frame2",
-                "ALLEX_Hand_Middle_Pad",
-                "ALLEX_Hand_Distal_Frame1",
-                "ALLEX_Right_Hand_Thumb_Proximal_Cover",
-                "ALLEX_Right_Hand_Thumb_Proximal_Pad",
-                "ALLEX_Right_Hand_Thumb_Proximal_Link1",
-                "ALLEX_Right_Hand_Thumb_Proximal_Link2",
-                "ALLEX_Right_Hand_Thumb_Middle_Pad",
-                "ALLEX_Right_Hand_Thumb_Middle_Link",
-                "ALLEX_Right_Hand_Thumb_Distal_Frame",
-            ],
-            "lock_joints": [
-                "Waist_Yaw_Joint",
-                "Waist_Pitch_Lower_Joint",
-            ],
-        },
+        newton_replicate_kwargs=_newton_replicate_kwargs(ALLEX_FULL_MIMIC_SPEC),
     )
 
     robot: ArticulationCfg = ALLEX_CFG.replace(prim_path="/World/envs/env_.*/Robot")
@@ -141,7 +193,7 @@ class AllexEnvCfg(DirectRLEnvCfg):
 
 @configclass
 class AllexEnvNoLeftCfg(DirectRLEnvCfg):
-    """ALLEX_newton_no_left.usd 전용: 왼팔/왼손 제거, 목 Fixed → nv=31, 허리+오른팔+오른손 (Newton)."""
+    """ALLEX_newton_no_left.usd: 왼팔/왼손 제거, nv=31, 허리+오른팔+오른손. Optional hammer/table."""
 
     episode_length_s = 30.0
     decimation = 2
@@ -156,7 +208,7 @@ class AllexEnvNoLeftCfg(DirectRLEnvCfg):
         solver_cfg=solver_cfg,
         num_substeps=4,
         debug_mode=False,
-        use_cuda_graph=True,  # True면 [solver.substep] print는 캡처 시 1회만 찍힘. 매 스텝 찍으려면 False (성능 저하)
+        use_cuda_graph=True,
     )
 
     sim: SimulationCfg = SimulationCfg(
@@ -169,50 +221,15 @@ class AllexEnvNoLeftCfg(DirectRLEnvCfg):
         newton_cfg=newton_cfg,
     )
 
+    hammer_cfg: ArticulationCfg | None = ALLEX_NOLEFT_HAMMER_CFG
+    table_cfg: ArticulationCfg | None = ALLEX_NOLEFT_TABLE_CFG
+
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=NUM_ENVS,
         env_spacing=2.0,
         replicate_physics=True,
         clone_in_fabric=True,
-        newton_replicate_kwargs={
-            "equality_constraints": ALLEX_MIMIC_SPEC,
-            "simplify_meshes": {"*": "convex_hull"},
-            "load_visual_shapes": True,
-            "disable_collision_bodies": [
-                "Waist_Base", "Waist_Yaw", "Waist_Pitch_Back",
-                "Waist_Pitch_Lower", "Waist_Pitch_Upper",
-                "Neck_Pitch", "Neck_Yaw", "Camera_Body",
-            ],
-            "disable_collision_shapes": [
-                "ALLEX_Right_Shoulder_Yaw_Frame_Collision_1",
-                "ALLEX_Right_Shoulder_Yaw_Frame_Collision_2",
-                "ALLEX_Right_Upperarm_Cover_Collision1",
-                "ALLEX_Right_Upperarm_Cover_Collision2",
-                "ALLEX_Right_Upperarm_Cover_Collision3",
-                "ALLEX_Right_Elbow_Frame",
-                "ALLEX_Right_Forearm_Base_Cover",
-                "ALLEX_Right_Forearm_Lower_Cover",
-                "ALLEX_Right_Forearm_Middle_Frame",
-                "ALLEX_Right_Forearm_Cover",
-                "ALLEX_Hand_Proximal_Frame2",
-                "ALLEX_Hand_Proximal_Cover",
-                "ALLEX_Hand_Proximal_Pad",
-                "ALLEX_Hand_Middle_Frame2",
-                "ALLEX_Hand_Middle_Pad",
-                "ALLEX_Hand_Distal_Frame1",
-                "ALLEX_Right_Hand_Thumb_Proximal_Cover",
-                "ALLEX_Right_Hand_Thumb_Proximal_Pad",
-                "ALLEX_Right_Hand_Thumb_Proximal_Link1",
-                "ALLEX_Right_Hand_Thumb_Proximal_Link2",
-                "ALLEX_Right_Hand_Thumb_Middle_Pad",
-                "ALLEX_Right_Hand_Thumb_Middle_Link",
-                "ALLEX_Right_Hand_Thumb_Distal_Frame",
-            ],
-            "lock_joints": [
-                "Waist_Yaw_Joint",
-                "Waist_Pitch_Lower_Joint",
-            ],
-        },
+        newton_replicate_kwargs=_newton_replicate_kwargs(ALLEX_MIMIC_SPEC),
     )
 
     robot: ArticulationCfg = ALLEX_NO_LEFT_CFG.replace(prim_path="/World/envs/env_.*/Robot")
