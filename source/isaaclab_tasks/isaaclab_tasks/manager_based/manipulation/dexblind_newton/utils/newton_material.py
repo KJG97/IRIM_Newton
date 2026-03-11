@@ -109,8 +109,19 @@ def set_shape_contact_stiffness(
 ):
     """Set Newton contact stiffness (ke/kd) for all collision shapes of an asset.
 
-    In MuJoCo these map to ``geom.solref = (-ke, -kd)`` (impedance convention).
-    Higher *ke* makes the surface harder; higher *kd* adds contact damping.
+    The Newton kernel converts these to MuJoCo positive ``geom_solref``
+    (timeconst, dampratio) via::
+
+        timeconst = 2 / kd
+        dampratio = sqrt(1 / (timeconst^2 * ke))
+
+    Smaller timeconst = stiffer contact. To make the table "hard":
+
+    - ``ke=250_000, kd=1_000`` → solref ≈ (0.002, 1.0)  — 10× stiffer than default
+    - ``ke=100_000, kd=1_000`` → solref ≈ (0.002, 1.58) — stiffer with more damping
+
+    Both ke and kd must be > 0 for the kernel to apply them; otherwise MuJoCo
+    defaults (0.02, 1.0) are used.
 
     Args:
         env: The environment instance.
@@ -165,6 +176,18 @@ def set_shape_contact_stiffness(
     kd_tensor[idx] = kd
 
     NewtonManager._solver.notify_model_changed(SolverNotifyFlags.SHAPE_PROPERTIES)
+
+    # Verify: read back after notify (solver might overwrite in C++/Warp)
+    i0 = int(idx[0].item())
+    ke_readback = float(ke_tensor[i0].item())
+    kd_readback = float(kd_tensor[i0].item())
+    if abs(ke_readback - ke) > 1.0 or abs(kd_readback - kd) > 1.0:
+        import warnings
+        warnings.warn(
+            f"[set_shape_contact_stiffness] '{asset_cfg.name}': requested ke={ke:.1f}, kd={kd:.1f} "
+            f"but after notify_model_changed readback is ke={ke_readback:.1f}, kd={kd_readback:.1f}. "
+            "Solver may be clamping or using defaults."
+        )
 
 
 def randomize_object_pose_xy_yaw(
