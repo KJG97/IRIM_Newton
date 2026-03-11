@@ -10,8 +10,7 @@ import math
 import torch
 from typing import TYPE_CHECKING
 
-import warp as wp
-from pxr import Gf, Sdf, Usd, UsdGeom, UsdUtils, Vt
+from pxr import Gf, Sdf, Usd, UsdGeom, Vt
 
 import isaaclab.sim as sim_utils
 from isaaclab.sim.utils import safe_set_attribute_on_usd_prim
@@ -63,17 +62,13 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
         proto_mask.scatter_(1, proto_idx.view(-1, 1).to(torch.long), clone_masking.any(dim=1, keepdim=True))
         usd_replicate(stage, src_paths, dest_paths, world_indices, proto_mask)
         stage.GetPrimAtPath(cfg.template_root).SetActive(False)
-
+        replicate_args = [clone_path_fmt.format(0)], [clone_path_fmt], world_indices, clone_masking[0].unsqueeze(0)
+        get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
+        positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
         # If all prototypes map to env_0, clone whole env_0 to all envs; else clone per-object
         if torch.all(proto_idx == 0):
-            # One source (whole env 0) → mapping must be (1, num_clones) for physics/usd clone APIs
-            whole_env_mapping = torch.ones(1, num_clones, dtype=torch.bool, device=cfg.device)
-            replicate_args = [clone_path_fmt.format(0)], [clone_path_fmt], world_indices, whole_env_mapping
-            get_pos = lambda path: stage.GetPrimAtPath(path).GetAttribute("xformOp:translate").Get()  # noqa: E731
-            positions = torch.tensor([get_pos(clone_path_fmt.format(i)) for i in world_indices])
-            if cfg.clone_physics:
-                clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
-                template_clone_cfg.physics_clone_fn(stage, *replicate_args, positions=positions, **clone_kwargs)
+            if cfg.clone_physics and cfg.physics_clone_fn is not None:
+                cfg.physics_clone_fn(stage, *replicate_args, positions=positions)
             if cfg.clone_usd:
                 # parse env_origins directly from clone_path
                 usd_replicate(stage, *replicate_args, positions=positions)
@@ -81,9 +76,8 @@ def clone_from_template(stage: Usd.Stage, num_clones: int, template_clone_cfg: T
         else:
             selected_src = [tpl.format(int(idx)) for tpl, idx in zip(dest_paths, proto_idx.tolist())]
             replicate_args = selected_src, dest_paths, world_indices, clone_masking
-            if cfg.clone_physics:
-                clone_kwargs = getattr(cfg, "physics_clone_fn_kwargs", None) or {}
-                template_clone_cfg.physics_clone_fn(stage, *replicate_args, **clone_kwargs)
+            if cfg.clone_physics and cfg.physics_clone_fn is not None:
+                cfg.physics_clone_fn(stage, *replicate_args, positions=positions)
             if cfg.clone_usd:
                 usd_replicate(stage, *replicate_args)
 
@@ -159,7 +153,7 @@ def usd_replicate(
         env_ids: Environment indices.
         mask: Optional per-source or shared mask. ``None`` selects all.
         positions: Optional positions (``[E, 3]``) -> ``xformOp:translate``.
-        quaternions: Optional orientations (``[E, 4]``) in ``wxyz`` -> ``xformOp:orient``.
+        quaternions: Optional orientations (``[E, 4]``) in ``xyzw`` -> ``xformOp:orient``.
 
     Returns:
         None
@@ -207,7 +201,8 @@ def usd_replicate(
                             o_attr = ps.GetAttributeAtPath(dp + ".xformOp:orient")
                             if o_attr is None:
                                 o_attr = Sdf.AttributeSpec(ps, "xformOp:orient", Sdf.ValueTypeNames.Quatd)
-                            o_attr.default = Gf.Quatd(float(q[0]), Gf.Vec3d(float(q[1]), float(q[2]), float(q[3])))
+                            # xyzw convention: q[3] is w, q[0:3] is xyz
+                            o_attr.default = Gf.Quatd(float(q[3]), Gf.Vec3d(float(q[0]), float(q[1]), float(q[2])))
                             op_names.append("xformOp:orient")
                         # Only author xformOpOrder for the ops we actually authored
                         if op_names:
@@ -215,356 +210,6 @@ def usd_replicate(
                                 ps, UsdGeom.Tokens.xformOpOrder, Sdf.ValueTypeNames.TokenArray
                             )
                             op_order.default = Vt.TokenArray(op_names)
-
-
-def physx_replicate(
-    stage: Usd.Stage,
-    sources: list[str],  # e.g. ["/World/Template/A", "/World/Template/B"]
-    destinations: list[str],  # e.g. ["/World/envs/env_{}/Robot", "/World/envs/env_{}/Object"]
-    env_ids: torch.Tensor,  # env_ids
-    mapping: torch.Tensor,  # (num_sources, num_envs) bool; True -> place sources[i] into world=j
-    use_fabric: bool = False,
-) -> None:
-    """Replicate prims via PhysX replicator with per-row mapping.
-
-    Builds per-source destination lists from ``mapping`` and calls PhysX ``replicate``.
-    Rows covering all environments use ``useEnvIds=True``; partial rows use ``False``.
-    The replicator is registered for the call and then unregistered.
-
-    Args:
-        stage: USD stage.
-        sources: Source prim paths (``S``).
-        destinations: Destination templates (``S``) with ``"{}"`` for env index.
-        env_ids: Environment indices (``[E]``).
-        mapping: Bool/int mask (``[S, E]``) selecting envs per source.
-        use_fabric: Use Fabric for replication.
-
-    Returns:
-        None
-    """
-    from omni.physx import get_physx_replicator_interface
-
-    stage_id = UsdUtils.StageCache.Get().Insert(stage).ToLongInt()
-    current_worlds: list[int] = []
-    current_template: str = ""
-    num_envs = mapping.size(1)
-
-    def attach_fn(_stage_id: int):
-        return ["/World/envs", *sources]
-
-    def rename_fn(_replicate_path: str, i: int):
-        return current_template.format(current_worlds[i])
-
-    def attach_end_fn(_stage_id: int):
-        nonlocal current_template
-        rep = get_physx_replicator_interface()
-        for i, src in enumerate(sources):
-            current_worlds[:] = env_ids[mapping[i]].tolist()
-            current_template = destinations[i]
-            rep.replicate(
-                _stage_id,
-                src,
-                len(current_worlds),
-                useEnvIds=len(current_worlds) == num_envs,
-                useFabricForReplication=use_fabric,
-            )
-        # unregister only AFTER all replicate() calls completed
-        rep.unregister_replicator(_stage_id)
-
-    get_physx_replicator_interface().register_replicator(stage_id, attach_fn, attach_end_fn, rename_fn)
-
-
-def _newton_joint_index_by_name(builder, name: str) -> int:
-    """Return joint index in builder whose joint_key equals or ends with name. Returns -1 if not found."""
-    for i, key in enumerate(builder.joint_key):
-        if key == name:
-            return i
-        if key.endswith("/" + name):
-            return i
-        # Last path component (e.g. "env_0/Robot/Waist_Yaw_Joint" -> "Waist_Yaw_Joint")
-        if key.split("/")[-1] == name:
-            return i
-    return -1
-
-
-def _approximate_meshes_per_asset(
-    builder,
-    simplify_meshes: bool | str | dict[str, str | tuple[str, dict]],
-) -> None:
-    """Apply ``approximate_meshes`` with per-asset granularity.
-
-    Args:
-        builder: A Newton ``ModelBuilder`` whose shapes have already been loaded.
-        simplify_meshes: Approximation control.
-
-            * ``True`` — use ``"convex_hull"`` for all mesh shapes.
-            * ``str`` — use that method for all mesh shapes.
-            * ``dict`` — per-asset mapping. Keys are name fragments matched against
-              ``shape_key``; ``"*"`` is the fallback. Values can be:
-
-              - ``str`` — method name (e.g. ``"coacd"``).
-              - ``(str, dict)`` — method name + extra kwargs passed to
-                ``approximate_meshes`` (e.g. ``("coacd", {"threshold": 0.05})``).
-    """
-    import newton
-
-    mesh_collide = int(newton.ShapeFlags.COLLIDE_SHAPES)
-    eligible = [
-        i for i in range(builder.shape_count)
-        if builder.shape_type[i] == newton.GeoType.MESH and builder.shape_flags[i] & mesh_collide
-    ]
-    if not eligible:
-        return
-
-    def _parse_entry(entry) -> tuple[str, dict]:
-        if isinstance(entry, tuple):
-            return entry[0], entry[1]
-        return entry, {}
-
-    if isinstance(simplify_meshes, dict):
-        default_entry = simplify_meshes.get("*", "convex_hull")
-        groups: dict[tuple[str, frozenset], list[int]] = {}
-        entry_map: dict[tuple[str, frozenset], dict] = {}
-        for idx in eligible:
-            key = builder.shape_key[idx]
-            method, kwargs = _parse_entry(default_entry)
-            for pattern, val in simplify_meshes.items():
-                if pattern != "*" and pattern in key:
-                    method, kwargs = _parse_entry(val)
-                    break
-            gkey = (method, frozenset(kwargs.items()))
-            groups.setdefault(gkey, []).append(idx)
-            entry_map[gkey] = kwargs
-        for gkey, indices in groups.items():
-            method = gkey[0]
-            builder.approximate_meshes(method, keep_visual_shapes=True,
-                                       shape_indices=indices, **entry_map[gkey])
-    else:
-        method = simplify_meshes if isinstance(simplify_meshes, str) else "convex_hull"
-        builder.approximate_meshes(method, keep_visual_shapes=True)
-
-
-def _disable_collision_for_bodies(
-    builder,
-    body_patterns: list[str],
-) -> None:
-    """Clear ``COLLIDE_SHAPES`` flag on shapes belonging to matched bodies.
-
-    For each shape in the builder, if the parent body's key contains any of the
-    given substrings, the shape's ``COLLIDE_SHAPES`` bit is cleared so it no
-    longer participates in broadphase collision detection.
-
-    Args:
-        builder: A Newton ``ModelBuilder``.
-        body_patterns: Substrings to match against ``body_key``.
-    """
-    import newton
-
-    collide_bit = int(newton.ShapeFlags.COLLIDE_SHAPES)
-    body_keys = builder.body_key
-    disabled = 0
-    for i in range(builder.shape_count):
-        body_idx = builder.shape_body[i]
-        if body_idx < 0:
-            continue
-        bkey = body_keys[body_idx]
-        if any(pat in bkey for pat in body_patterns):
-            builder.shape_flags[i] &= ~collide_bit
-            disabled += 1
-    if disabled:
-        import logging
-
-        logging.getLogger("isaaclab.cloner").info(
-            "disable_collision_bodies: cleared COLLIDE_SHAPES on %d shapes "
-            "(patterns: %s)", disabled, body_patterns,
-        )
-
-
-def _disable_collision_for_shapes(
-    builder,
-    shape_patterns: list[str],
-) -> None:
-    """Clear ``COLLIDE_SHAPES`` flag on shapes whose key matches any pattern.
-
-    Args:
-        builder: A Newton ``ModelBuilder``.
-        shape_patterns: Substrings to match against ``shape_key``.
-    """
-    import newton
-
-    collide_bit = int(newton.ShapeFlags.COLLIDE_SHAPES)
-    disabled = 0
-    for i in range(builder.shape_count):
-        if not (builder.shape_flags[i] & collide_bit):
-            continue
-        skey = builder.shape_key[i]
-        if any(pat in skey for pat in shape_patterns):
-            builder.shape_flags[i] &= ~collide_bit
-            disabled += 1
-    if disabled:
-        import logging
-
-        logging.getLogger("isaaclab.cloner").info(
-            "disable_collision_shapes: cleared COLLIDE_SHAPES on %d shapes "
-            "(patterns: %s)", disabled, shape_patterns,
-        )
-
-
-
-def _lock_joints(
-    builder,
-    joint_patterns: list[str],
-    eps: float = 1e-6,
-) -> None:
-    """Lock joints by clamping their limits to a near-zero range around the initial value.
-
-    MuJoCo requires ``range[0] < range[1]``, so we use a tiny epsilon gap
-    (``q0 - eps, q0 + eps``) instead of exact equality.
-
-    Args:
-        builder: A Newton ``ModelBuilder``.
-        joint_patterns: Substrings to match against ``joint_key``.
-        eps: Half-width of the allowed range (radians). Default 1e-6.
-    """
-    locked = 0
-    for i in range(builder.joint_count):
-        jkey = builder.joint_key[i]
-        if any(pat in jkey for pat in joint_patterns):
-            q_start = builder.joint_q_start[i]
-            q0 = builder.joint_q[q_start]
-            builder.joint_limit_lower[i] = q0 - eps
-            builder.joint_limit_upper[i] = q0 + eps
-            locked += 1
-    if locked:
-        import logging
-
-        logging.getLogger("isaaclab.cloner").info(
-            "lock_joints: locked %d joints at initial position (eps=%.1e, "
-            "patterns: %s)", locked, eps, joint_patterns,
-        )
-
-
-def newton_replicate(
-    stage: Usd.Stage,
-    sources: list[str],
-    destinations: list[str],
-    env_ids: torch.Tensor,
-    mapping: torch.Tensor,
-    positions: torch.Tensor | None = None,
-    quaternions: torch.Tensor | None = None,
-    up_axis: str = "Z",
-    simplify_meshes: bool | str | dict[str, str | tuple[str, dict]] = True,
-    equality_constraints: list[tuple[str, str, tuple[float, ...]]] | None = None,
-    load_visual_shapes: bool = True,
-    disable_collision_bodies: list[str] | None = None,
-    disable_collision_shapes: list[str] | None = None,
-    lock_joints: list[str] | None = None,
-):
-    """Replicate prims into a Newton ``ModelBuilder`` using a per-source mapping.
-
-    Args:
-        simplify_meshes: Controls collision mesh approximation.
-
-            * ``True`` — use ``"convex_hull"`` for all mesh shapes.
-            * ``False`` — disable approximation entirely.
-            * ``str`` — use that single method for all mesh shapes
-              (``"convex_hull"``, ``"coacd"``, ``"vhacd"``, ``"bounding_box"``, ``"bounding_sphere"``).
-            * ``dict`` — per-asset mapping from name fragment to method (or
-              ``(method, kwargs)`` tuple for extra parameters).
-              The special key ``"*"`` sets the fallback for unmatched shapes.
-              Example: ``{"hammer": ("coacd", {"threshold": 0.05}), "table": "bounding_box", "*": "convex_hull"}``
-        equality_constraints: Optional list of (mimic_joint_name, driver_joint_name, (c0,c1,c2,c3,c4))
-            for Newton joint equality: q_mimic = c0 + c1*q_driver + c2*q_driver^2 + ... .
-            Joint names are matched against builder.joint_key (exact or path suffix).
-        load_visual_shapes: If False, visual-only shapes are not loaded into the
-            prototype builder, reducing total shape count. Default True.
-        disable_collision_bodies: List of body-name substrings. Any shape whose
-            parent body key contains one of these substrings will have its
-            ``COLLIDE_SHAPES`` flag cleared, removing it from broadphase collision.
-            Useful for excluding torso/neck links that don't need to collide.
-        disable_collision_shapes: List of shape-name substrings. Any shape whose
-            key contains one of these substrings will have its ``COLLIDE_SHAPES``
-            flag cleared. Finer-grained than ``disable_collision_bodies``.
-        lock_joints: List of joint-name substrings. Matched joints have their
-            upper and lower limits set equal to the initial position, effectively
-            freezing them in place.
-    """
-    from newton import ModelBuilder, solvers
-
-    from isaaclab.sim._impl.newton_manager import NewtonManager
-
-    if positions is None:
-        positions = torch.zeros((mapping.size(1), 3), device=mapping.device, dtype=torch.float32)
-    if quaternions is None:
-        quaternions = torch.zeros((mapping.size(1), 4), device=mapping.device, dtype=torch.float32)
-        quaternions[:, 3] = 1.0
-
-    # load empty stage
-    builder = ModelBuilder(up_axis=up_axis)
-    stage_info = builder.add_usd(stage, ignore_paths=["/World/envs"] + sources)
-
-    protos: dict[str, ModelBuilder] = {}
-    for src_path in sources:
-        p = ModelBuilder(up_axis=up_axis)
-        solvers.SolverMuJoCo.register_custom_attributes(p)
-        p.add_usd(stage, root_path=src_path, load_visual_shapes=load_visual_shapes,
-                  skip_mesh_approximation=bool(simplify_meshes))
-        if simplify_meshes:
-            _approximate_meshes_per_asset(p, simplify_meshes)
-        if disable_collision_bodies:
-            _disable_collision_for_bodies(p, disable_collision_bodies)
-        if disable_collision_shapes:
-            _disable_collision_for_shapes(p, disable_collision_shapes)
-        if lock_joints:
-            _lock_joints(p, lock_joints)
-        if equality_constraints:
-            added = 0
-            for mimic_name, driver_name, polycoef in equality_constraints:
-                idx1 = _newton_joint_index_by_name(p, mimic_name)
-                idx2 = _newton_joint_index_by_name(p, driver_name)
-                if idx1 >= 0 and idx2 >= 0:
-                    p.add_equality_constraint_joint(
-                        joint1=idx1,
-                        joint2=idx2,
-                        polycoef=list(polycoef) if len(polycoef) >= 5 else list(polycoef) + [0.0] * (5 - len(polycoef)),
-                    )
-                    added += 1
-            if added == 0 and equality_constraints:
-                import logging
-
-                log = logging.getLogger("isaaclab.cloner")
-                log.warning(
-                    "newton_replicate: no joint equality constraints added (joint names may not match). "
-                    "joint_key sample: %s",
-                    list(getattr(p, "joint_key", []))[:10],
-                )
-        protos[src_path] = p
-
-    # add by world, then by active sources in that world (column-wise)
-    for col, env_id in enumerate(env_ids.tolist()):
-        for row in torch.nonzero(mapping[:, col], as_tuple=True)[0].tolist():
-            builder.add_world(
-                protos[sources[row]],
-                xform=wp.transform(positions[col].tolist(), quaternions[col].tolist()),
-                # world=int(env_id),
-            )
-
-    # per-source, per-world renaming (strict prefix swap), compact style preserved
-    for i, src_path in enumerate(sources):
-        src_prefix_len = len(src_path.rstrip("/"))
-        swap = lambda name, new_root: new_root + name[src_prefix_len:]  # noqa: E731
-        world_cols = torch.nonzero(mapping[i], as_tuple=True)[0].tolist()
-        world_roots = {int(env_ids[c]): destinations[i].format(int(env_ids[c])) for c in world_cols}
-
-        for t in ("body", "joint", "shape", "articulation"):
-            keys, worlds_arr = getattr(builder, f"{t}_key"), getattr(builder, f"{t}_world")
-            for k, w in enumerate(worlds_arr):
-                if w in world_roots and keys[k].startswith(src_path):
-                    keys[k] = swap(keys[k], world_roots[w])
-
-    NewtonManager.set_builder(builder)
-    NewtonManager._num_envs = mapping.size(1)
-    return builder, stage_info
 
 
 def filter_collisions(
@@ -675,7 +320,8 @@ def grid_transforms(N: int, spacing: float = 1.0, up_axis: str = "z", device="cp
 
     Computes ``(x, y)`` coordinates in a roughly square grid centered at the origin
     with the provided spacing, places the third coordinate according to ``up_axis``,
-    and returns identity orientations (``wxyz``) for each instance.
+    and returns identity orientations. This matches the grid layout used by
+    :class:`isaaclab.terrains.TerrainImporter` for consistent environment positioning.
 
     Args:
         N: Number of instances.
@@ -686,22 +332,28 @@ def grid_transforms(N: int, spacing: float = 1.0, up_axis: str = "z", device="cp
     Returns:
         A tuple ``(pos, ori)`` where:
             - ``pos`` is a tensor of shape ``(N, 3)`` with positions.
-            - ``ori`` is a tensor of shape ``(N, 4)`` with identity quaternions in ``(w, x, y, z)``.
+            - ``ori`` is a tensor of shape ``(N, 4)`` with identity quaternions in ``(x, y, z, w)``.
     """
-    # rows/cols
-    rows = int(math.ceil(math.sqrt(N)))
-    cols = int(math.ceil(N / rows))
+    # Match terrain_importer._compute_env_origins_grid layout for consistency
+    num_rows = int(math.ceil(N / math.sqrt(N)))
+    num_cols = int(math.ceil(N / num_rows))
 
-    idx = torch.arange(N, device=device)
-    r = torch.div(idx, cols, rounding_mode="floor")
-    c = idx % cols
+    # Create meshgrid matching terrain's "ij" indexing
+    ii, jj = torch.meshgrid(
+        torch.arange(num_rows, device=device, dtype=torch.float32),
+        torch.arange(num_cols, device=device, dtype=torch.float32),
+        indexing="ij",
+    )
+    # Flatten and take first N elements
+    ii = ii.flatten()[:N]
+    jj = jj.flatten()[:N]
 
-    # centered grid coords
-    x = (c - (cols - 1) * 0.5) * spacing
-    y = ((rows - 1) * 0.5 - r) * spacing
+    # Match terrain's coordinate system: X from rows (negated), Y from cols
+    x = -(ii - (num_rows - 1) / 2) * spacing
+    y = (jj - (num_cols - 1) / 2) * spacing
+    z0 = torch.zeros(N, device=device)
 
     # place on plane based on up_axis
-    z0 = torch.zeros_like(x)
     if up_axis.lower() == "z":
         pos = torch.stack([x, y, z0], dim=1)
     elif up_axis.lower() == "y":
@@ -709,7 +361,7 @@ def grid_transforms(N: int, spacing: float = 1.0, up_axis: str = "z", device="cp
     else:  # up_axis == "x"
         pos = torch.stack([z0, x, y], dim=1)
 
-    # identity orientations (w,x,y,z)
+    # identity orientations (x,y,z,w)
     ori = torch.zeros((N, 4), device=device)
-    ori[:, 0] = 1.0
+    ori[:, 3] = 1.0  # w=1 for identity quaternion
     return pos, ori

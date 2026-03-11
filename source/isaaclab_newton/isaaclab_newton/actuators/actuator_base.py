@@ -9,7 +9,6 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from typing import TYPE_CHECKING, ClassVar
 
-import torch
 import warp as wp
 from isaaclab_newton.actuators.kernels import clip_efforts_with_limits
 
@@ -92,7 +91,6 @@ class ActuatorBase(ABC):
         self._joint_names = joint_names
         self._joint_mask = joint_mask
         self._joint_indices = joint_indices
-        self._joint_indices_tensor = torch.tensor(joint_indices, dtype=torch.long, device=device)
         self._env_mask = env_mask
         # Get the number of environments and joints from the articulation data
         self._num_envs = env_mask.shape[0]
@@ -153,11 +151,6 @@ class ActuatorBase(ABC):
         return self._joint_names
 
     @property
-    def joint_indices(self) -> torch.Tensor:
-        """Articulation's joint indices that are part of the group."""
-        return self._joint_indices_tensor
-
-    @property
     def joint_mask(self) -> wp.array:
         """Articulation's masked indices that denote which joints are part of the group."""
         return self._joint_mask
@@ -216,7 +209,6 @@ class ActuatorBase(ABC):
         # parse the parameter
         if cfg_value is not None:
             if isinstance(cfg_value, (float, int)):
-                # print(f"Parsing joint parameter: {cfg_value} for joints {self.joint_names}")
                 if isinstance(cfg_value, IntEnum):
                     cfg_value = int(cfg_value.value)
                 if original_value.dtype is wp.float32:
@@ -227,6 +219,7 @@ class ActuatorBase(ABC):
                 wp.launch(
                     update_array2D_with_value_indexed,
                     dim=(self._num_envs, len(self._joint_indices)),
+                    device=self._device,
                     inputs=[
                         cfg_value,
                         original_value,
@@ -241,6 +234,7 @@ class ActuatorBase(ABC):
                 wp.launch(
                     update_array2D_with_array1D_indexed,
                     dim=(self._num_envs, len(indices_global)),
+                    device=self._device,
                     inputs=[
                         wp.array(values, dtype=wp.float32, device=self._device),
                         original_value,
@@ -277,4 +271,5 @@ class ActuatorBase(ABC):
                 self._env_mask,
                 self.joint_mask,
             ],
+            device=self._device,
         )

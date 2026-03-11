@@ -9,18 +9,17 @@ import contextlib
 import copy
 import inspect
 import logging
+import weakref
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import isaaclab.utils.string as string_utils
+from isaaclab.physics import PhysicsEvent, PhysicsManager
 from isaaclab.utils import class_to_dict, string_to_callable
 
 from .manager_term_cfg import ManagerTermBaseCfg
 from .scene_entity_cfg import SceneEntityCfg
-
-# import omni.timeline
-
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -156,36 +155,24 @@ class ManagerBase(ABC):
         # if the simulation is not playing, we use callbacks to trigger the resolution of the scene
         # entities configuration. this is needed for cases where the manager is created after the
         # simulation, but before the simulation is playing.
-        # FIXME: Once Isaac Sim supports storing this information as USD schema, we can remove this
-        #   callback and resolve the scene entities directly inside `_prepare_terms`.
-        # if not self._env.sim.is_playing():
-        #     # note: Use weakref on all callbacks to ensure that this object can be deleted when its destructor
-        #     # is called
-        #     # The order is set to 20 to allow asset/sensor initialization to complete before the scene entities
-        #     # are resolved. Those have the order 10.
-        #     timeline_event_stream = omni.timeline.get_timeline_interface().get_timeline_event_stream()
-        #     self._resolve_terms_handle = timeline_event_stream.create_subscription_to_pop_by_type(
-        #         int(omni.timeline.TimelineEventType.PLAY),
-        #         lambda event, obj=weakref.proxy(self): obj._resolve_terms_callback(event),
-        #         order=20,
-        #     )
-        # else:
-        #     self._resolve_terms_handle = None
-        self._resolve_terms_handle = None
+        if not self._env.sim.is_playing():
+            # note: Use weakref on all callbacks to ensure that this object can be deleted when its destructor
+            # is called
+            def safe_callback(obj_ref):
+                """Safely invoke _resolve_terms_callback on a weakly-referenced object."""
+                with contextlib.suppress(ReferenceError):
+                    obj_ref._resolve_terms_callback(None)
+
+            obj_ref = weakref.proxy(self)
+
+            def callback_func(payload):
+                safe_callback(obj_ref)
+
+            PhysicsManager.register_callback(callback_func, PhysicsEvent.PHYSICS_READY, order=20)
 
         # parse config to create terms information
         if self.cfg:
             self._prepare_terms()
-
-    def __del__(self):
-        """Delete the manager."""
-        # Suppress errors during Python shutdown
-        # Note: contextlib may be None during interpreter shutdown
-        if contextlib is not None:
-            with contextlib.suppress(ImportError, AttributeError, TypeError):
-                if getattr(self, "_resolve_terms_handle", None):
-                    self._resolve_terms_handle.unsubscribe()
-                self._resolve_terms_handle = None
 
     """
     Properties.
@@ -363,9 +350,20 @@ class ManagerBase(ABC):
         if not callable(func_static):
             raise AttributeError(f"The term '{term_name}' is not callable. Received: {term_cfg.func}")
 
+        # TODO(jichuanh): This might not be reasonable here. Revisit
+        # Materialize default SceneEntityCfg kwargs (e.g. asset_cfg=SceneEntityCfg("robot")) into params.
+        # Otherwise, defaults live only in the callable signature and never get resolved/cached by the manager.
+        signature = inspect.signature(func_static)
+        for param in list(signature.parameters.values())[min_argc:]:
+            if param.default is inspect.Parameter.empty:
+                continue
+            if isinstance(param.default, SceneEntityCfg) and param.name not in term_cfg.params:
+                # Use configclass copy to avoid shared default objects.
+                term_cfg.params[param.name] = param.default.copy()
+
         # check statically if the term's arguments are matched by params
         term_params = list(term_cfg.params.keys())
-        args = inspect.signature(func_static).parameters
+        args = signature.parameters
         args_with_defaults = [arg for arg in args if args[arg].default is not inspect.Parameter.empty]
         args_without_defaults = [arg for arg in args if args[arg].default is inspect.Parameter.empty]
         args = args_without_defaults + args_with_defaults

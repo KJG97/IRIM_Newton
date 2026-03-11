@@ -106,12 +106,6 @@ class BaseContactSensor(SensorBase):
 
     @property
     @abstractmethod
-    def contact_partner_names(self) -> list[str] | None:
-        """Ordered names of shapes or bodies that are selected as contact partners."""
-        raise NotImplementedError(f"Contact partner names is not implemented for {self.__class__.__name__}.")
-
-    @property
-    @abstractmethod
     def contact_view(self) -> None:
         """View for the contact forces captured.
 
@@ -125,20 +119,20 @@ class BaseContactSensor(SensorBase):
     """
 
     @abstractmethod
-    def reset(self, env_ids: Sequence[int] | None = None, masks: wp.array(dtype=wp.bool) | None = None):
+    def reset(self, env_ids: Sequence[int] | None = None, env_mask: wp.array(dtype=wp.bool) | None = None):
         """Resets the sensor.
 
         Args:
             env_ids: The indices of the environments to reset. Defaults to None: all the environments are reset.
-            masks: The masks of the environments to reset. Defaults to None: all the environments are reset.
+            env_mask: The masks of the environments to reset. Defaults to None: all the environments are reset.
         """
         # reset the timers and counters
-        super().reset(env_ids)
+        super().reset(env_ids, env_mask)
 
     @abstractmethod
     def find_bodies(
         self, name_keys: str | Sequence[str], preserve_order: bool = False
-    ) -> tuple[wp.array, list[int], list[str]]:
+    ) -> tuple[wp.array, list[str], list[int]]:
         """Find bodies in the articulation based on the name keys.
 
         Args:
@@ -146,7 +140,7 @@ class BaseContactSensor(SensorBase):
             preserve_order: Whether to preserve the order of the name keys in the output. Defaults to False.
 
         Returns:
-            A tuple of lists containing the body mask, names and indices.
+            A tuple containing the body mask (wp.array), names (list[str]), and indices (list[int]).
         """
         raise NotImplementedError(f"Find bodies is not implemented for {self.__class__.__name__}.")
 
@@ -219,12 +213,11 @@ class BaseContactSensor(SensorBase):
         raise NotImplementedError(f"Create buffers is not implemented for {self.__class__.__name__}.")
 
     @abstractmethod
-    def _update_buffers_impl(self, env_ids: Sequence[int], masks: wp.array(dtype=wp.bool) | None = None):
+    def _update_buffers_impl(self, env_mask: wp.array | None):
         """Fills the buffers of the sensor data.
 
         Args:
-            env_ids: The indices of the environments to update. Defaults to None: all the environments are updated.
-            masks: The masks of the environments to update. Defaults to None: all the environments are updated.
+            env_mask: Mask of the environments to update. None: update all environments.
         """
         raise NotImplementedError(f"Update buffers is not implemented for {self.__class__.__name__}.")
 

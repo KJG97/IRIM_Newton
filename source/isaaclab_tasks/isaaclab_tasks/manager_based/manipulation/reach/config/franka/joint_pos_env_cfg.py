@@ -5,9 +5,9 @@
 
 import math
 
+from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+
 from isaaclab.sim import SimulationCfg
-from isaaclab.sim._impl.newton_manager_cfg import NewtonCfg
-from isaaclab.sim._impl.solvers_cfg import MJWarpSolverCfg
 from isaaclab.utils import configclass
 
 import isaaclab_tasks.manager_based.manipulation.reach.mdp as mdp
@@ -27,7 +27,8 @@ from isaaclab_assets import FRANKA_PANDA_CFG  # isort: skip
 @configclass
 class FrankaReachEnvCfg(ReachEnvCfg):
     sim: SimulationCfg = SimulationCfg(
-        newton_cfg=NewtonCfg(
+        dt=1 / 120,
+        physics=NewtonCfg(
             solver_cfg=MJWarpSolverCfg(
                 njmax=20,
                 nconmax=20,
@@ -35,12 +36,12 @@ class FrankaReachEnvCfg(ReachEnvCfg):
                 cone="pyramidal",
                 impratio=1,
                 ls_parallel=True,
-                integrator="implicit",
+                integrator="implicitfast",
                 save_to_mjcf="FrankaReachEnv.xml",
             ),
             num_substeps=1,
-            debug_mode=True,
-        )
+            debug_mode=False,
+        ),
     )
 
     def __post_init__(self):

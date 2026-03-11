@@ -19,6 +19,7 @@ class RendererBase(ABC):
         self._height = cfg.height
         self._width = cfg.width
         self._num_envs = cfg.num_envs
+        self._num_cameras = 1  # TODO: currently only supports 1 camera per environment
         # List of data types to use for rendering, e.g. ["rgb", "depth", "semantic_segmentation"]
         self._data_types = []
 
@@ -48,6 +49,10 @@ class RendererBase(ABC):
 
     def get_output(self):
         return self._output_data_buffers
+
+    def close(self):
+        """Close and clean up the renderer."""
+        pass
 
     def clone(self, cameras):
         """TODO: Clone the camera in renderer."""

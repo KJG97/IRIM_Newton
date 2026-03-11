@@ -32,6 +32,30 @@ parser.add_argument(
     "--distributed", action="store_true", default=False, help="Run training with multiple GPUs or nodes."
 )
 parser.add_argument("--export_io_descriptors", action="store_true", default=False, help="Export IO descriptors.")
+parser.add_argument(
+    "--timer",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Enable Isaac Lab timers (use --no-timer to disable).",
+)
+parser.add_argument(
+    "--step-timer",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Enable granular timer sections in environment step().",
+)
+parser.add_argument(
+    "--reset-timer",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Enable granular timer sections in environment reset().",
+)
+parser.add_argument(
+    "--manager_call_config",
+    type=str,
+    default=None,
+    help='Manager mode JSON only: \'{"RewardManager": 0, "ActionManager": 2, "default": 2}\'.',
+)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -79,12 +103,18 @@ import os
 import torch
 from datetime import datetime
 
+import isaaclab_experimental.envs.manager_based_rl_env_warp as manager_based_rl_env_warp
 from rsl_rl.runners import DistillationRunner, OnPolicyRunner
 
+import isaaclab.envs.manager_based_rl_env as manager_based_rl_env
 from isaaclab.utils.timer import Timer
 
-Timer.enable = False
-Timer.enable_display_output = False
+Timer.enable = args_cli.timer
+Timer.enable_display_output = args_cli.timer
+manager_based_rl_env.TIMER_ENABLED_STEP = args_cli.step_timer
+manager_based_rl_env.TIMER_ENABLED_RESET_IDX = args_cli.reset_timer
+manager_based_rl_env_warp.TIMER_ENABLED_STEP = args_cli.step_timer
+manager_based_rl_env_warp.TIMER_ENABLED_RESET_IDX = args_cli.reset_timer
 
 import isaaclab_tasks_experimental  # noqa: F401
 
@@ -149,6 +179,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg, agent_cfg: RslRlBaseRun
     # set the IO descriptors export flag if requested
     if isinstance(env_cfg, ManagerBasedRLEnvCfg):
         env_cfg.export_io_descriptors = args_cli.export_io_descriptors
+        # experimental manager-based Warp env reads this runtime switch from env cfg
+        env_cfg.manager_call_config = args_cli.manager_call_config
     else:
         logger.warning(
             "IO descriptors are only supported for manager based RL environments. No IO descriptors will be exported."
