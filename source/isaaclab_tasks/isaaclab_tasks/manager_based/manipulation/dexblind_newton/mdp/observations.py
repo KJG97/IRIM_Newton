@@ -1,13 +1,13 @@
 # Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Observation terms for dexblind_newton. Newton-compatible wrappers where needed."""
+"""Observation terms for dexblind_newton (Newton-compatible)."""
 
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING
 
+import torch
 import warp as wp
 
 from isaaclab.assets import Articulation
@@ -20,25 +20,24 @@ from isaaclab_tasks.manager_based.manipulation.dexblind.mdp.observations import 
     reference_joint_pos,
 )
 
+from ..config.constants import FINGERTIP_BODIES, SEGMENT_TO_IDX
+
+# =============================================================================
+# Joint torque (Newton-specific)
+# =============================================================================
+
+
 def joint_applied_torque(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """MuJoCo qfrc_actuator를 Newton joint 순서로 반환.
-
-    Implicit actuator에서 PD 토크는 MuJoCo 내부에서 계산되므로
-    Control.joint_f (= robot.data.joint_effort)는 항상 0.
-    실제 액추에이터 토크는 mjw_data.qfrc_actuator에 있다.
-    """
+    """Return MuJoCo qfrc_actuator mapped to Newton joint order."""
     from isaaclab.sim._impl.newton_manager import NewtonManager
 
     solver = NewtonManager._solver
     model = NewtonManager._model
-    mjw_data = solver.mjw_data
-    dof_map = solver.mjc_dof_to_newton_dof  # (nworld, nv): mjc_dof → global newton dof
-
-    qfrc_act = wp.to_torch(mjw_data.qfrc_actuator)   # (nworld, nv)
-    dof_map_t = wp.to_torch(dof_map).long()           # (nworld, nv)
+    qfrc_act = wp.to_torch(solver.mjw_data.qfrc_actuator)
+    dof_map_t = wp.to_torch(solver.mjc_dof_to_newton_dof).long()
 
     nworld = qfrc_act.shape[0]
     dofs_per_world = model.joint_dof_count // model.num_worlds
@@ -61,121 +60,104 @@ def joint_applied_torque(
     return robot_torque[:, joint_ids]
 
 
-def hammer_relative_pose(
-    env: ManagerBasedRLEnv,
-    hammer_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
-) -> torch.Tensor:
-    """Origin_Body 기준 Hammer의 상대좌표 (pos3 + quat_xyzw4) = 7-dim."""
+# =============================================================================
+# Relative poses (Origin_Body frame)
+# =============================================================================
+
+
+def _relative_pose_to_origin(body_suffix: str, env: ManagerBasedRLEnv) -> torch.Tensor:
+    """(N, 7): pos3 + quat_xyzw4 relative to Origin_Body."""
     from .utils import get_body_poses_batched, relative_pose_batched
 
     n, dev = env.num_envs, env.device
     o_pos, o_quat = get_body_poses_batched("Origin_Body", n, dev)
-    h_pos, h_quat = get_body_poses_batched("hammer", n, dev)
-    rel_pos, rel_quat = relative_pose_batched(o_pos, o_quat, h_pos, h_quat)
+    t_pos, t_quat = get_body_poses_batched(body_suffix, n, dev)
+    rel_pos, rel_quat = relative_pose_batched(o_pos, o_quat, t_pos, t_quat)
     return torch.cat([rel_pos, rel_quat], dim=-1)
+
+
+def hammer_relative_pose(
+    env: ManagerBasedRLEnv,
+    hammer_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
+) -> torch.Tensor:
+    return _relative_pose_to_origin("hammer", env)
+
+
+def hammer_initial_relative_pose(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Hammer pose relative to Origin_Body at reset/first creation only (N, 7).
+
+    Reads from env._hammer_initial_relative_pose, updated in DexblindNewtonEnv
+    on reset; does not change during the episode.
+    """
+    return env._hammer_initial_relative_pose
 
 
 def right_hand_relative_pose(
     env: ManagerBasedRLEnv,
     robot_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
-    """Origin_Body 기준 Right_Hand_base의 상대좌표 (pos3 + quat_xyzw4) = 7-dim."""
-    from .utils import get_body_poses_batched, relative_pose_batched
-
-    n, dev = env.num_envs, env.device
-    o_pos, o_quat = get_body_poses_batched("Origin_Body", n, dev)
-    h_pos, h_quat = get_body_poses_batched("Right_Hand_base", n, dev)
-    rel_pos, rel_quat = relative_pose_batched(o_pos, o_quat, h_pos, h_quat)
-    return torch.cat([rel_pos, rel_quat], dim=-1)
+    return _relative_pose_to_origin("Right_Hand_base", env)
 
 
-# ---------------------------------------------------------------------------
-#  Privileged observations for Asymmetric Critic (SimToolReal Appendix D.4)
-# ---------------------------------------------------------------------------
-
-_FINGERTIP_BODIES = [
-    "R_Hand_Thumb_Distal",
-    "R_Hand_Index_Distal",
-    "R_Hand_Middle_Distal",
-    "R_Hand_Ring_Distal",
-    "R_Hand_Little_Distal",
-]
+# =============================================================================
+# Body velocities
+# =============================================================================
 
 
 def _get_body_vel_batched(
     suffix: str, num_envs: int, device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return (lin_vel (N,3), ang_vel (N,3)) for a named body across all envs."""
     from isaaclab.sim._impl.newton_manager import NewtonManager
     from .utils import _get_body_indices
 
-    state = NewtonManager._state_0
-    body_qd = wp.to_torch(state.body_qd)  # (total_bodies, 6)
-    indices = _get_body_indices(suffix, num_envs, device)
-
-    safe_idx = indices.clamp(min=0)
-    vel = body_qd[safe_idx]  # (N, 6): [lin_vel(3), ang_vel(3)]
-
-    valid = (indices >= 0).unsqueeze(-1)
+    body_qd = wp.to_torch(NewtonManager._state_0.body_qd)
+    idx = _get_body_indices(suffix, num_envs, device).clamp(min=0)
+    vel = body_qd[idx]
+    valid = (_get_body_indices(suffix, num_envs, device) >= 0).unsqueeze(-1)
     vel = vel * valid.float()
-
     return vel[:, :3], vel[:, 3:6]
 
 
-def object_lin_vel(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
-) -> torch.Tensor:
-    """Ground-truth object linear velocity (N, 3)."""
-    lin_vel, _ = _get_body_vel_batched(asset_cfg.name, env.num_envs, env.device)
-    return lin_vel
+def object_lin_vel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer")) -> torch.Tensor:
+    lin, _ = _get_body_vel_batched(asset_cfg.name, env.num_envs, env.device)
+    return lin
 
 
-def object_ang_vel(
-    env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
-) -> torch.Tensor:
-    """Ground-truth object angular velocity (N, 3)."""
-    _, ang_vel = _get_body_vel_batched(asset_cfg.name, env.num_envs, env.device)
-    return ang_vel
+def object_ang_vel(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer")) -> torch.Tensor:
+    _, ang = _get_body_vel_batched(asset_cfg.name, env.num_envs, env.device)
+    return ang
 
 
-def palm_lin_vel(
-    env: ManagerBasedRLEnv,
-    body_name: str = "Right_Hand_base",
-) -> torch.Tensor:
-    """Ground-truth palm linear velocity (N, 3)."""
-    lin_vel, _ = _get_body_vel_batched(body_name, env.num_envs, env.device)
-    return lin_vel
+def palm_lin_vel(env: ManagerBasedRLEnv, body_name: str = "Right_Hand_base") -> torch.Tensor:
+    lin, _ = _get_body_vel_batched(body_name, env.num_envs, env.device)
+    return lin
 
 
-def palm_ang_vel(
-    env: ManagerBasedRLEnv,
-    body_name: str = "Right_Hand_base",
-) -> torch.Tensor:
-    """Ground-truth palm angular velocity (N, 3)."""
-    _, ang_vel = _get_body_vel_batched(body_name, env.num_envs, env.device)
-    return ang_vel
+def palm_ang_vel(env: ManagerBasedRLEnv, body_name: str = "Right_Hand_base") -> torch.Tensor:
+    _, ang = _get_body_vel_batched(body_name, env.num_envs, env.device)
+    return ang
+
+
+# =============================================================================
+# Fingertip–object distance
+# =============================================================================
 
 
 def min_fingertip_object_distance(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
 ) -> torch.Tensor:
-    """Minimum distance from any fingertip to the object (N, 1).
-
-    Uses a running minimum that resets each episode (stored in env).
-    """
+    """Running-minimum fingertip-to-object distance (N, 1). Resets each episode."""
     from .utils import get_body_poses_batched
 
     n, dev = env.num_envs, env.device
     obj_pos, _ = get_body_poses_batched(asset_cfg.name, n, dev)
 
     dists = []
-    for tip_name in _FINGERTIP_BODIES:
-        tip_pos, _ = get_body_poses_batched(tip_name, n, dev)
+    for tip in FINGERTIP_BODIES:
+        tip_pos, _ = get_body_poses_batched(tip, n, dev)
         dists.append(torch.norm(tip_pos - obj_pos, dim=-1))
-    min_dist = torch.stack(dists, dim=-1).min(dim=-1).values  # (N,)
+    min_dist = torch.stack(dists, dim=-1).min(dim=-1).values
 
     buf_key = "_priv_min_ft_obj_dist"
     if not hasattr(env, buf_key):
@@ -184,14 +166,29 @@ def min_fingertip_object_distance(
         buf = getattr(env, buf_key)
         buf[:] = torch.min(buf, min_dist)
         min_dist = buf
-
     return min_dist.unsqueeze(-1)
 
 
-def episode_step_count(
-    env: ManagerBasedRLEnv,
-) -> torch.Tensor:
-    """Normalized episode step count (N, 1). Divided by max_episode_length for stability."""
+# =============================================================================
+# Dynamic goal pose
+# =============================================================================
+
+
+def current_goal_pose(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """Current dynamic goal pose (N, 7): pos(3) + quat_xyzw(4).
+
+    Reads from env._dynamic_goal_pos / _dynamic_goal_rot which are managed by
+    DexblindNewtonEnv (reset to default on episode start, resampled when close).
+    """
+    return torch.cat([env._dynamic_goal_pos, env._dynamic_goal_rot], dim=-1)
+
+
+# =============================================================================
+# Scalar privileged signals
+# =============================================================================
+
+
+def episode_step_count(env: ManagerBasedRLEnv) -> torch.Tensor:
     max_len = env.max_episode_length if env.max_episode_length > 0 else 1.0
     return (env.episode_length_buf.float() / max_len).unsqueeze(-1)
 
@@ -201,55 +198,99 @@ def object_is_grasped(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
     lift_threshold: float = 0.91,
 ) -> torch.Tensor:
-    """Binary grasped indicator I_grasped (N, 1). True once object z >= threshold."""
+    """1 while object z >= threshold, 0 when below."""
     from .utils import root_pos_w_z
-
-    z = root_pos_w_z(env, asset_cfg)
-    currently_lifted = z >= lift_threshold
-
-    buf_key = "_priv_grasped_flag"
-    if not hasattr(env, buf_key):
-        setattr(env, buf_key, currently_lifted.clone())
-    else:
-        buf = getattr(env, buf_key)
-        buf[:] = buf | currently_lifted
-
-    return getattr(env, buf_key).float().unsqueeze(-1)
+    return (root_pos_w_z(env, asset_cfg) >= lift_threshold).float().unsqueeze(-1)
 
 
-def instantaneous_reward(
-    env: ManagerBasedRLEnv,
-) -> torch.Tensor:
-    """Most recent per-env reward r_t (N, 1)."""
+def instantaneous_reward(env: ManagerBasedRLEnv) -> torch.Tensor:
     if hasattr(env, "reward_buf"):
         return env.reward_buf.unsqueeze(-1)
     return torch.zeros(env.num_envs, 1, dtype=torch.float32, device=env.device)
 
 
-def cumulative_successes(
+# =============================================================================
+# Hand contact observations
+# =============================================================================
+
+
+def _build_finger_segment_map(
     env: ManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
-    lift_threshold: float = 0.91,
+    sensor_name: str,
+    finger_names: tuple[str, ...],
+) -> tuple[torch.Tensor, torch.Tensor] | None:
+    """Cached (num_bodies,) finger-index and segment-index tensors. -1 = skip."""
+    cache_key = f"_hand_contact_fs_map_{sensor_name}"
+    if hasattr(env, cache_key):
+        return getattr(env, cache_key)
+
+    body_names = getattr(env.scene.sensors[sensor_name], "body_names", None)
+    if body_names is None:
+        return None
+
+    finger_map, segment_map = [], []
+    for name in body_names:
+        parts = name.split("_")
+        fi, si = -1, -1
+        if len(parts) >= 4 and parts[0] == "R" and parts[1] == "Hand":
+            finger_part, seg_part = parts[-2], parts[-1]
+            if finger_part in finger_names and seg_part in SEGMENT_TO_IDX:
+                fi = finger_names.index(finger_part)
+                si = SEGMENT_TO_IDX[seg_part]
+        finger_map.append(fi)
+        segment_map.append(si)
+
+    result = (
+        torch.tensor(finger_map, dtype=torch.long, device=env.device),
+        torch.tensor(segment_map, dtype=torch.long, device=env.device),
+    )
+    setattr(env, cache_key, result)
+    return result
+
+
+def _get_contact_flags(env: ManagerBasedRLEnv, sensor_name: str, threshold: float) -> torch.Tensor | None:
+    """(N, B) bool: per-body contact flags, or None if sensor has no data."""
+    net_forces = env.scene.sensors[sensor_name].data.net_forces_w
+    if net_forces is None:
+        return None
+    return net_forces.norm(dim=-1) > threshold
+
+
+def hand_has_contact(
+    env: ManagerBasedRLEnv,
+    sensor_name: str = "hand_contact_sensor",
+    force_threshold: float = 1e-6,
 ) -> torch.Tensor:
-    """Cumulative number of times the object was lifted this episode (N, 1).
+    """Binary (N, 1): any hand link has contact."""
+    flags = _get_contact_flags(env, sensor_name, force_threshold)
+    if flags is None:
+        return torch.zeros(env.num_envs, 1, dtype=torch.float32, device=env.device)
+    return flags.any(dim=1).float().unsqueeze(-1)
 
-    Increments each time object transitions from below to above threshold.
-    """
-    from .utils import root_pos_w_z
 
-    z = root_pos_w_z(env, asset_cfg)
-    currently_lifted = z >= lift_threshold
+def hand_contact_per_finger(
+    env: ManagerBasedRLEnv,
+    sensor_name: str = "hand_contact_sensor",
+    finger_names: tuple[str, ...] = ("Index", "Middle", "Ring", "Little", "Thumb"),
+    segments_per_finger: int = 3,
+    force_threshold: float = 1e-6,
+) -> torch.Tensor:
+    """Per-finger per-segment contact (N, 5×3=15). Order: Index, Middle, Ring, Little, Thumb × (Prox, Mid, Dist)."""
+    nf, ns = len(finger_names), segments_per_finger
+    flags = _get_contact_flags(env, sensor_name, force_threshold)
+    if flags is None:
+        return torch.zeros(env.num_envs, nf * ns, dtype=torch.float32, device=env.device)
 
-    prev_key = "_priv_prev_lifted"
-    count_key = "_priv_cum_successes"
-    if not hasattr(env, prev_key):
-        setattr(env, prev_key, torch.zeros(env.num_envs, dtype=torch.bool, device=env.device))
-        setattr(env, count_key, torch.zeros(env.num_envs, dtype=torch.float32, device=env.device))
+    parsed = _build_finger_segment_map(env, sensor_name, finger_names)
+    if parsed is None:
+        return torch.zeros(env.num_envs, nf * ns, dtype=torch.float32, device=env.device)
 
-    prev = getattr(env, prev_key)
-    count = getattr(env, count_key)
-    new_lift = currently_lifted & ~prev
-    count[:] = count + new_lift.float()
-    prev[:] = currently_lifted
-
-    return count.unsqueeze(-1)
+    body_to_finger, body_to_segment = parsed
+    n = flags.shape[0]
+    out = torch.zeros(n, nf * ns, dtype=torch.float32, device=env.device)
+    for f in range(nf):
+        for s in range(ns):
+            mask = (body_to_finger == f) & (body_to_segment == s)
+            if mask.any():
+                out[:, f * ns + s] = flags[:, mask].any(dim=1).float()
+    return out

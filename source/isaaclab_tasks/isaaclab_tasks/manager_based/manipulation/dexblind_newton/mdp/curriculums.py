@@ -9,6 +9,11 @@ from typing import TYPE_CHECKING
 
 from isaaclab.envs import mdp
 
+from isaaclab_tasks.manager_based.manipulation.dexblind.mdp.curriculums import (  # noqa: F401
+    modify_term_cfg_with_logging,
+    step_based_interpolate_fn,
+)
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 

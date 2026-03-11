@@ -30,33 +30,25 @@ _EPS = 1e-6
 def hammer_goal_proximity_reward(
     env: ManagerBasedRLEnv,
     hammer_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
-    goal_pos: tuple[float, float, float] = (0.5, -0.2, 1.15),
-    goal_rot: tuple[float, float, float, float] = (0.0, -0.70711, -0.70711, 0.0),
     pos_std: float = 0.05,
     rot_std: float = 0.2,
     pos_weight: float = 0.5,
     rot_weight: float = 0.5,
     lift_threshold: float = 0.92,
 ) -> torch.Tensor:
-    """Dense reward for bringing the hammer close to the goal marker pose.
+    """Dense reward for bringing the hammer close to the dynamic goal pose.
 
-    goal_pos/goal_rot are in env-local coordinates (same frame as GoalMarkerCfg).
-    The hammer world pose is converted to env-local by subtracting env_origins.
-
-    Gated by hammer lift: reward is zero until hammer z >= lift_threshold.
+    Reads per-env goal from env._dynamic_goal_pos / _dynamic_goal_rot
+    (managed by DexblindNewtonEnv). Gated by hammer lift threshold.
     """
-    from isaaclab.utils.math import quat_mul, quat_inv
-
     n, dev = env.num_envs, env.device
     lifted = root_pos_w_z(env, hammer_cfg) >= lift_threshold
 
     h_pos, h_quat = get_body_poses_batched("hammer", n, dev)
+    local_pos = h_pos - env.scene.env_origins
 
-    env_origins = env.scene.env_origins  # (N, 3)
-    local_pos = h_pos - env_origins
-
-    g_pos = torch.tensor(goal_pos, dtype=torch.float32, device=dev).unsqueeze(0).expand(n, 3)
-    g_quat = torch.tensor(goal_rot, dtype=torch.float32, device=dev).unsqueeze(0).expand(n, 4)
+    g_pos = env._dynamic_goal_pos  # (N, 3)
+    g_quat = env._dynamic_goal_rot  # (N, 4)
 
     pos_err = torch.norm(local_pos - g_pos, dim=-1)
     safe_pos_std = max(pos_std, _EPS)
@@ -77,24 +69,21 @@ def grasp_point_proximity_reward(
     env: ManagerBasedRLEnv,
     hammer_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
     pos_std: float = 0.05,
-    lift_threshold: float = 0.92,
     grasp_offset: tuple[float, float, float] = _GRASP_POINT_LOCAL_OFFSET,
 ) -> torch.Tensor:
     """Dense reward for bringing Right_Hand_base close to the hammer's grasp_point.
 
-    Gated by hammer lift: reward is zero until hammer z >= lift_threshold.
+    Always active (no lift gate) so the agent gets reward for approaching the
+    grasp point even before lifting, encouraging retry after a failed grasp.
 
-    grasp_point is a non-rigid Xform child of the hammer body, so it does not
-    appear in Newton body_q. We compute its world position by applying the
-    local offset to the hammer body pose via quaternion rotation.
+    grasp_point is a non-rigid Xform child of the hammer body. We compute its
+    world position by applying the local offset to the hammer body pose.
 
-    reward = exp(-||hand_pos - grasp_world_pos|| / pos_std) * lifted
+    reward = exp(-||hand_pos - grasp_world_pos|| / pos_std)
     """
     from isaaclab.utils.math import quat_apply
 
     n, dev = env.num_envs, env.device
-    lifted = root_pos_w_z(env, hammer_cfg) >= lift_threshold
-
     hammer_pos, hammer_quat = get_body_poses_batched("hammer", n, dev)
     hand_pos, _ = get_body_poses_batched("Right_Hand_base", n, dev)
 
@@ -103,17 +92,91 @@ def grasp_point_proximity_reward(
 
     dist = torch.norm(hand_pos - grasp_world_pos, dim=-1)
     safe_pos_std = max(pos_std, _EPS)
-    return torch.exp(-dist / safe_pos_std) * lifted.float()
+    return torch.exp(-dist / safe_pos_std)
+
+
+def fingertip_grasp_point_proximity_reward(
+    env: ManagerBasedRLEnv,
+    hammer_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
+    pos_std: float = 0.08,
+    grasp_offset: tuple[float, float, float] = _GRASP_POINT_LOCAL_OFFSET,
+    finger_body_names: list[str] | None = None,
+) -> torch.Tensor:
+    """Dense reward for bringing all fingertips close to the hammer's grasp point.
+
+    Uses the mean of per-finger proximity rewards so that all fingers are
+    encouraged to be near the grasp point, not just the closest one.
+    Always active (no lift gate) to encourage retry.
+
+    reward = mean over fingers of exp(-dist_i / pos_std)
+    """
+    from isaaclab.utils.math import quat_apply
+
+    from ..config.constants import FINGERTIP_BODIES
+
+    n, dev = env.num_envs, env.device
+    finger_names = finger_body_names if finger_body_names is not None else FINGERTIP_BODIES
+
+    hammer_pos, hammer_quat = get_body_poses_batched("hammer", n, dev)
+    offset = torch.tensor(grasp_offset, dtype=torch.float32, device=dev).expand(n, 3)
+    grasp_world_pos = hammer_pos + quat_apply(hammer_quat, offset)
+
+    per_finger_rew = []
+    for tip_name in finger_names:
+        tip_pos, _ = get_body_poses_batched(tip_name, n, dev)
+        d = torch.norm(tip_pos - grasp_world_pos, dim=-1)
+        safe_pos_std = max(pos_std, _EPS)
+        per_finger_rew.append(torch.exp(-d / safe_pos_std))
+    # (n_fingers,) of (N,) -> (N, n_fingers) -> mean over fingers
+    rew = torch.stack(per_finger_rew, dim=-1).mean(dim=-1)
+    return rew
 
 
 def hammer_lift_reward(
     env: ManagerBasedRLEnv,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
     threshold: float = 0.9,
+    late_scale: float = 1.0,
 ) -> torch.Tensor:
-    """Reward 1.0 when hammer z >= threshold, else 0.0."""
+    """Reward when hammer z >= threshold; scaled linearly by episode progress.
+
+    time_weight = 1.0 + (late_scale - 1.0) * progress, so later in the episode
+    the same lift gives more reward when late_scale > 1.0.
+
+    Args:
+        asset_cfg: Hammer scene entity.
+        threshold: Minimum hammer z to count as lifted.
+        late_scale: Multiplier at episode end (progress=1). At start (progress=0) weight is 1.0. Default 1.0 (no scaling).
+    """
     z = root_pos_w_z(env, asset_cfg)
-    return (z >= threshold).float()
+    lifted = (z >= threshold).float()
+
+    if late_scale == 1.0:
+        return lifted
+
+    max_len = env.max_episode_length if env.max_episode_length > 0 else 1
+    progress = env.episode_length_buf.float().to(env.device) / max_len
+    time_weight = 1.0 + (late_scale - 1.0) * progress
+    return lifted * time_weight
+
+
+def late_lift_penalty(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
+    lift_threshold: float = 0.92,
+    mid_episode_ratio: float = 0.5,
+) -> torch.Tensor:
+    """Returns 1.0 when past mid-episode and hammer is still not lifted (for use as penalty with negative weight).
+
+    Use with weight < 0 so that the agent is penalized for not having lifted
+    the hammer by the middle of the episode.
+    """
+    max_len = env.max_episode_length if env.max_episode_length > 0 else 1
+    progress = env.episode_length_buf.float().to(env.device) / max_len
+    past_mid = progress >= mid_episode_ratio
+    z = root_pos_w_z(env, asset_cfg)
+    not_lifted = z < lift_threshold
+    return (past_mid & not_lifted).float()
 
 
 def reference_trajectory_tracking_reward(
@@ -175,42 +238,29 @@ def hand_final_pose_reward(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     hammer_cfg: SceneEntityCfg = SceneEntityCfg("hammer"),
     hand_joint_names: list[str] | None = None,
-    goal_pos: tuple[float, float, float] = (0.65, -0.2, 1.2),
-    goal_rot: tuple[float, float, float, float] = (0.0, -0.70711, -0.70711, 0.0),
-    proximity_threshold: float = 0.8,
+    lift_threshold: float = 1.0,
     joint_std: float = 0.1,
 ) -> torch.Tensor:
     """Reward hand joints for matching the trajectory's final frame pose.
 
-    Gated by hammer-goal proximity: only active when the combined
-    pos+rot proximity score exceeds proximity_threshold.
+    Gated by hammer lift: only active when hammer z >= lift_threshold.
+
+    Uses 0.5*mean(r_i) + 0.5*min(r_i) where r_i = exp(-|e_i|/joint_std): mean gives
+    dense gradient to all joints, min penalises any lagging joint; convex combination
+    keeps reward scale in [0,1] (product would squash scale).
 
     Args:
         command_name: name of the ReferenceTrajectoryCommand in command_manager.
         asset_cfg: robot articulation (with hand_joint_names resolved).
-        hammer_cfg: hammer scene entity for proximity gating.
+        hammer_cfg: hammer scene entity for lift gating.
         hand_joint_names: hand joint names to track. Must match trajectory joint names.
-        goal_pos: goal position for proximity gating (env-local).
-        goal_rot: goal quaternion for proximity gating (env-local, xyzw).
-        proximity_threshold: minimum proximity score to activate this reward.
-        joint_std: std for exp(-error/std) shaping.
+        lift_threshold: minimum hammer z to activate this reward.
+        joint_std: std for exp(-error/std) shaping (smaller = tighter constraint).
     """
     n, dev = env.num_envs, env.device
 
-    # --- proximity gate ---
-    h_pos, h_quat = get_body_poses_batched("hammer", n, dev)
-    local_pos = h_pos - env.scene.env_origins
-    g_pos = torch.tensor(goal_pos, dtype=torch.float32, device=dev).unsqueeze(0)
-    g_quat = torch.tensor(goal_rot, dtype=torch.float32, device=dev).unsqueeze(0)
+    gate = (root_pos_w_z(env, hammer_cfg) >= lift_threshold).float()
 
-    pos_err = torch.norm(local_pos - g_pos, dim=-1)
-    pos_score = torch.exp(-pos_err / max(0.05, _EPS))
-    dot = torch.sum(h_quat * g_quat, dim=-1).abs().clamp(min=0.0, max=1.0)
-    rot_score = torch.exp(-torch.acos(dot) / 0.2)
-    proximity = 0.5 * pos_score + 0.5 * rot_score
-    gate = (proximity >= proximity_threshold).float()
-
-    # --- get final frame hand joint targets from trajectory ---
     cmd = env.command_manager.get_term(command_name)
     final_positions = cmd.positions[-1]  # (num_traj_joints,)
 
@@ -225,7 +275,6 @@ def hand_final_pose_reward(
             return torch.zeros(n, device=dev)
     target = final_positions[traj_indices].unsqueeze(0).expand(n, -1)  # (N, num_hand_joints)
 
-    # --- current hand joint positions ---
     robot: Articulation = env.scene[asset_cfg.name]
     joint_pos = wp.to_torch(robot.data.joint_pos)  # (N, total_joints)
     joint_ids = asset_cfg.joint_ids
@@ -233,10 +282,12 @@ def hand_final_pose_reward(
         joint_ids = torch.tensor(joint_ids, dtype=torch.long, device=dev)
     current = joint_pos[:, joint_ids]  # (N, num_hand_joints)
 
-    # --- per-joint error → exp reward ---
     err = torch.abs(current - target)
     safe_joint_std = max(joint_std, _EPS)
-    per_joint_rew = torch.exp(-err / safe_joint_std)
-    mean_rew = per_joint_rew.mean(dim=-1)  # (N,)
+    per_joint_rew = torch.exp(-err / safe_joint_std)  # (N, num_hand_joints)
 
-    return mean_rew * gate
+    r_mean = per_joint_rew.mean(dim=-1)
+    r_min = per_joint_rew.min(dim=-1).values
+    # Convex combination: scale stays in [0,1]; mean gives gradient, min penalises lagging joints.
+    rew = 0.4 * r_mean + 0.6 * r_min
+    return rew * gate
