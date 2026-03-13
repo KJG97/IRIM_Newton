@@ -47,32 +47,11 @@ class MJWarpSolverCfg(NewtonSolverCfg):
     solver_type: str = "mujoco_warp"
     """Solver type. Can be "mujoco_warp"."""
 
-    njmax: int | None = None
-    """Number of constraints per environment (world).
-
-    If None, the value is auto-computed from the initial MuJoCo data (``mj_data.nefc``)
-    with the ``njmax_multiply`` safety factor applied.
-    """
+    njmax: int = 300
+    """Number of constraints per environment (world)."""
 
     nconmax: int | None = None
-    """Number of contact points per environment (world).
-
-    If None, the value is auto-computed from the initial MuJoCo data (``mj_data.ncon``)
-    with the ``nconmax_margin`` added.
-    """
-
-    nconmax_margin: int = 100
-    """Extra margin added to the auto-computed ``nconmax`` (i.e. ``mj_data.ncon + nconmax_margin``).
-
-    Only used when ``nconmax`` is None.
-    """
-
-    njmax_multiply: float = 2.0
-    """Safety multiplier applied to the auto-computed ``njmax``.
-
-    The effective value is ``nconmax * njmax_multiply``.
-    Only used when ``njmax`` is None.
-    """
+    """Number of contact points per environment (world)."""
 
     iterations: int = 100
     """Number of solver iterations."""
@@ -122,9 +101,6 @@ class MJWarpSolverCfg(NewtonSolverCfg):
     use_mujoco_contacts: bool = True
     """Whether to use MuJoCo's contact solver."""
 
-    mj_data_memory: int | None = None
-    """Bytes for MuJoCo mjData arena+stack (mjSpec.memory). If None, MuJoCo default is used.
-    Increase this (e.g. 16*1024*1024) when you see mj_stackAlloc stack overflow with large contact/constraint counts."""
 
 @configclass
 class XPBDSolverCfg(NewtonSolverCfg):
