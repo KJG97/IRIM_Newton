@@ -279,9 +279,6 @@ def _spawn_from_usd_file(
     # modify rigid body properties
     if cfg.rigid_props is not None:
         schemas.modify_rigid_body_properties(prim_path, cfg.rigid_props)
-    # define mesh collision (e.g. convex decomposition) so schema is applied before modify
-    if cfg.collision_props is not None and getattr(cfg.collision_props, "mesh_collision_property", None) is not None:
-        schemas.define_mesh_collision_properties(prim_path, cfg.collision_props.mesh_collision_property, stage=None)
     # modify collision properties
     if cfg.collision_props is not None:
         schemas.modify_collision_properties(prim_path, cfg.collision_props)
