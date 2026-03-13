@@ -1,0 +1,1021 @@
+<mujoco model="allex with contact sensors">
+  <!-- Compiler settings -->
+  <compiler angle="radian" autolimits="true" />
+  <option timestep="0.002" integrator="implicitfast" />
+
+  <!-- Default setting -->
+  <default>
+    <default class="position">
+      <position group="1"/>
+    </default>
+    <default class="motor">
+      <motor group="2" />
+    </default>
+    <!-- Visual (group2) and collision (group3) class -->
+    <default class="visual_white">
+      <geom group="2" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.95 0.95 0.95 1"/>
+    </default>
+    <default class="visual_black">
+      <geom group="2" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.15 0.15 0.15 1"/>
+    </default>
+    <default class="visual_gray">
+      <geom group="2" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.5 0.5 0.5 1"/>
+    </default>
+    <default class="visual_yellow">
+      <geom group="2" type="mesh" contype="0" conaffinity="0" density="0" rgba="0.95 0.7 0.2 1"/>
+    </default>
+    <default class="collision">
+      <geom group="3" type="mesh" density="2700"/>
+    </default>
+  </default>
+
+  <!-- Assets -->
+  <asset> 
+    <!-- Hip and Waist -->
+    <mesh name="ALLEX_Base" scale="0.001 0.001 0.001" file="mesh/ALLEX_Base.stl"></mesh>
+    <mesh name="ALLEX_Base_Yaw_Act" scale="0.001 0.001 0.001" file="mesh/ALLEX_Base_Yaw_Act.stl"></mesh>
+    <mesh name="ALLEX_Waist_Yaw" scale="0.001 0.001 0.001" file="mesh/ALLEX_Waist_Yaw.stl"></mesh>
+    <mesh name="ALLEX_Waist_Yaw_Pitch_Act" scale="0.001 0.001 0.001" file="mesh/ALLEX_Waist_Yaw_Pitch_Act.stl"></mesh>
+    <mesh name="ALLEX_Waist_Front_Link" scale="0.001 0.001 0.001" file="mesh/ALLEX_Waist_Front_Link.stl"></mesh>
+    <mesh name="ALLEX_Waist_Front_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Waist_Front_Cover.stl"></mesh>
+    <mesh name="ALLEX_Waist_Back_Link" scale="0.001 0.001 0.001" file="mesh/ALLEX_Waist_Back_Link.stl"></mesh>
+    <mesh name="ALLEX_Waist_Back_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Waist_Back_Cover.stl"></mesh>
+    <mesh name="ALLEX_Chest_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Chest_Cover.stl"></mesh>
+    <mesh name="ALLEX_Chest_Light" scale="0.001 0.001 0.001" file="mesh/ALLEX_Chest_Light.stl"></mesh>
+
+    
+    <!-- Chest and Head and Neck -->
+    <mesh name="ALLEX_Chest_Neck_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Chest_Neck_Cover.stl"></mesh>
+    <mesh name="ALLEX_Neck_Pitch_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Neck_Pitch_Cover.stl"></mesh>
+    <mesh name="ALLEX_Neck_Yaw_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Neck_Yaw_Cover.stl"></mesh>
+    <mesh name="ALLEX_Face" scale="0.001 0.001 0.001" file="mesh/ALLEX_Face.stl"></mesh>
+
+    <!-- Left arm -->
+    <mesh name="ALLEX_Left_Shoulder_Pitch_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Shoulder_Pitch_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Shoulder_Yaw_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Shoulder_Yaw_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Shoulder_Yaw_Frame_Collision_1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Shoulder_Yaw_Frame_Collision_1.stl"></mesh>
+    <mesh name="ALLEX_Left_Shoulder_Yaw_Frame_Collision_2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Shoulder_Yaw_Frame_Collision_2.stl"></mesh>
+
+    <mesh name="ALLEX_Left_Upperarm_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Upperarm_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Upperarm_Cover_Collision1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Upperarm_Cover_Collision1.stl"></mesh>
+    <mesh name="ALLEX_Left_Upperarm_Cover_Collision2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Upperarm_Cover_Collision2.stl"></mesh>
+    <mesh name="ALLEX_Left_Upperarm_Cover_Collision3" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Upperarm_Cover_Collision3.stl"></mesh>
+    <mesh name="ALLEX_Left_Elbow_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Elbow_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Forearm_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Forearm_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Forearm_Base_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Forearm_Base_Cover.stl"></mesh>
+    <mesh name="ALLEX_Left_Forearm_Middle_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Forearm_Middle_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Forearm_Lower_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Forearm_Lower_Cover.stl"></mesh>
+    <mesh name="ALLEX_Left_Forearm_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Forearm_Cover.stl"></mesh>
+    <mesh name="ALLEX_Left_Wrist_Roll_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Wrist_Roll_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Wrist_Pitch_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Wrist_Pitch_Frame.stl"></mesh>
+
+    <!-- Left hand -->
+    <mesh name="ALLEX_Left_Hand_Palm" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Thumb" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Thumb.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Pad.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Pad1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Pad1.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Pad2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Pad2.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Thumb1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Thumb1.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Thumb2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Thumb2.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Palm_Thumb3" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Palm_Thumb3.stl"></mesh>
+
+    <mesh name="ALLEX_Left_Hand_Thumb_Pitch_Pivot" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Pitch_Pivot.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Proximal_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Proximal_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Proximal_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Proximal_Cover.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Proximal_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Proximal_Pad.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Proximal_Link1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Proximal_Link1.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Proximal_Link2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Proximal_Link2.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Middle_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Middle_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Middle_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Middle_Pad.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Middle_Link" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Middle_Link.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Distal_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Distal_Frame.stl"></mesh>
+    <mesh name="ALLEX_Left_Hand_Thumb_Distal_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Left_Hand_Thumb_Distal_Pad.stl"></mesh>
+
+    <!-- Right arm -->
+    <mesh name="ALLEX_Right_Shoulder_Pitch_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Shoulder_Pitch_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Shoulder_Yaw_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Shoulder_Yaw_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Shoulder_Yaw_Frame_Collision_1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Shoulder_Yaw_Frame_Collision_1.stl"></mesh>
+    <mesh name="ALLEX_Right_Shoulder_Yaw_Frame_Collision_2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Shoulder_Yaw_Frame_Collision_2.stl"></mesh>
+
+    <mesh name="ALLEX_Right_Upperarm_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Upperarm_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Upperarm_Cover_Collision1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Upperarm_Cover_Collision1.stl"></mesh>
+    <mesh name="ALLEX_Right_Upperarm_Cover_Collision2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Upperarm_Cover_Collision2.stl"></mesh>
+    <mesh name="ALLEX_Right_Upperarm_Cover_Collision3" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Upperarm_Cover_Collision3.stl"></mesh>
+    <mesh name="ALLEX_Right_Elbow_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Elbow_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Forearm_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Forearm_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Forearm_Base_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Forearm_Base_Cover.stl"></mesh>
+    <mesh name="ALLEX_Right_Forearm_Lower_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Forearm_Lower_Cover.stl"></mesh>
+    <mesh name="ALLEX_Right_Forearm_Middle_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Forearm_Middle_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Forearm_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Forearm_Cover.stl"></mesh>
+    <mesh name="ALLEX_Right_Wrist_Roll_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Wrist_Roll_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Wrist_Pitch_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Wrist_Pitch_Frame.stl"></mesh>
+
+    <!-- Right hand -->
+    <mesh name="ALLEX_Right_Hand_Palm" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Thumb" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Thumb.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Pad.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Pad1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Pad1.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Pad2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Pad2.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Thumb1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Thumb1.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Thumb2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Thumb2.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Palm_Thumb3" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Palm_Thumb3.stl"></mesh>
+
+    <mesh name="ALLEX_Right_Hand_Thumb_Pitch_Pivot" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Pitch_Pivot.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Proximal_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Proximal_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Proximal_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Proximal_Cover.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Proximal_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Proximal_Pad.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Proximal_Link1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Proximal_Link1.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Proximal_Link2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Proximal_Link2.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Middle_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Middle_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Middle_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Middle_Pad.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Middle_Link" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Middle_Link.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Distal_Frame" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Distal_Frame.stl"></mesh>
+    <mesh name="ALLEX_Right_Hand_Thumb_Distal_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Right_Hand_Thumb_Distal_Pad.stl"></mesh>
+
+    <!-- finger -->
+    <mesh name="ALLEX_Hand_Proximal_Roll" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Proximal_Roll.stl"></mesh>
+    <mesh name="ALLEX_Hand_Proximal" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Proximal_Pitch.stl"></mesh>
+    <mesh name="ALLEX_Hand_Proximal_Frame1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Proximal_Frame1.stl"></mesh>
+    <mesh name="ALLEX_Hand_Proximal_Frame2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Proximal_Frame2.stl"></mesh>
+    <mesh name="ALLEX_Hand_Proximal_Cover" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Proximal_Cover.stl"></mesh>
+    <mesh name="ALLEX_Hand_Proximal_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Proximal_Pad.stl"></mesh>
+    <mesh name="ALLEX_Hand_Middle_Frame1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Middle_Frame1.stl"></mesh>
+    <mesh name="ALLEX_Hand_Middle_Frame2" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Middle_Frame2.stl"></mesh>
+    <mesh name="ALLEX_Hand_Middle_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Middle_Pad.stl"></mesh>
+    <mesh name="ALLEX_Hand_Distal_Frame1" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Distal_Frame1.stl"></mesh>
+    <mesh name="ALLEX_Hand_Distal_Pad" scale="0.001 0.001 0.001" file="mesh/ALLEX_Hand_Distal_Pad.stl"></mesh>
+  </asset>
+
+  <!-- World body -->
+  <worldbody>
+    <body name="Waist_Base" pos="0.0 0.0 0.7756594">
+      <inertial pos="0 0 0" mass="3.0" diaginertia="0.001 0.001 0.001"/>
+      <geom class="visual_black" mesh="ALLEX_Base"/>
+      <!-- <geom class="collision" mesh="ALLEX_Base"/> -->
+      <geom class="visual_black" mesh="ALLEX_Base_Yaw_Act"/>
+      <geom class="collision" mesh="ALLEX_Base_Yaw_Act"/>
+
+      <body name="Waist_Yaw_link" pos="0.0 0.0 0.064">
+        <inertial pos="0 0 0" mass="2.0" diaginertia="0.001 0.001 0.001"/>
+        <geom class="visual_black" mesh="ALLEX_Waist_Yaw"/>
+        <geom class="collision" mesh="ALLEX_Waist_Yaw"/>
+        <geom class="visual_black" mesh="ALLEX_Waist_Yaw_Pitch_Act"/>
+        <geom class="collision" mesh="ALLEX_Waist_Yaw_Pitch_Act"/>
+        <joint name="Waist_Yaw_Joint" axis="0 0 1" range="-2.792526 2.792526" damping="10"/>
+
+        <body name="Waist_Pitch_Lower_link" pos="0.06 0.0 0.12">
+          <inertial pos="-0.01 0.0 0.15" mass="2.0" diaginertia="0.0012 0.0012 0.0006" />
+          <geom class="visual_black" mesh="ALLEX_Waist_Front_Link"/>
+          <geom class="collision" mesh="ALLEX_Waist_Front_Link"/>
+          <geom class="visual_gray" mesh="ALLEX_Waist_Front_Cover"/>
+          <geom class="collision" mesh="ALLEX_Waist_Front_Cover"/>
+          <joint name="Waist_Pitch_Lower_Joint" axis="0 1 0" range="-0.523598 0.785398" damping="10"/>
+
+          <body name="Waist_Pitch_Upper_link" pos="0.0 0.0 0.32">
+            <inertial pos="-0.015 0.0 0.084 " mass="4.4" diaginertia="0.01 0.01 0.01" />
+            <geom class="visual_white" mesh="ALLEX_Chest_Cover"/>
+            <geom class="collision" mesh="ALLEX_Chest_Cover"/>
+            <geom class="visual_yellow" mesh="ALLEX_Chest_Light"/>
+            <geom class="collision" mesh="ALLEX_Chest_Light"/>
+            <geom class="visual_gray" mesh="ALLEX_Chest_Neck_Cover"/>
+            <geom class="collision" mesh="ALLEX_Chest_Neck_Cover"/>
+            <joint name="Waist_Pitch_Upper_Joint" axis="0 1 0" range="-0.785398 0.523598" damping="10"/>
+            
+            <body name="Neck_Pitch_link" pos="0.008 0.0 0.255">
+              <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001" />
+              <geom class="visual_gray" mesh="ALLEX_Neck_Pitch_Cover"/>
+              <geom class="collision" mesh="ALLEX_Neck_Pitch_Cover"/>
+              <joint name="Neck_Pitch_Joint" axis="0 1 0" range="-0.785398 0.785398" damping="15" />
+
+              <body name="Neck_Yaw_link" pos="-0.0000005 0.0 0.093">
+                <inertial pos="0 0 0" mass="0.5" diaginertia="0.001 0.001 0.001" />
+                <geom class="visual_white" mesh="ALLEX_Neck_Yaw_Cover"/>
+                <geom class="collision" mesh="ALLEX_Neck_Yaw_Cover"/>
+                <geom class="visual_black" mesh="ALLEX_Face"/>
+                <geom class="collision" mesh="ALLEX_Face"/>
+                <joint name="Neck_Yaw_Joint" axis="0 0 1" range="-1.570796 1.570796" damping="10"/>
+
+                <body name="Camera_Body" pos="0.1 0.0 0.05">
+                  <camera mode="fixed" name="robotview" pos="0 0 0" xyaxes="1 0 0 0 1 0" fovy="60" />
+                </body>
+              </body>
+            </body>
+
+            <!-- Left arm -->
+            <body name="L_Shoulder_Pitch_link" pos="0.0415 0.0710988 0.1359705" quat="0.9914449 0.1305262 2e-7 0.0000013">
+              <inertial pos="-0.113658294 0.050850686 0.000243921" mass="0.91799" fullinertia="0.00299917349350943 0.00591555013402288 0.00619094106616406 0.0013597887385476 -3.29916698720736E-05 1.05435785870105E-05"/>
+              <geom class="visual_black" mesh="ALLEX_Left_Shoulder_Pitch_Frame"/>
+              <geom class="visual_yellow" mesh="ALLEX_Left_Shoulder_Pitch_Frame"/>
+              <joint name="L_Shoulder_Pitch_Joint" axis="0 1 0" range="-3.316126 1.745329" armature="0.04916348" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-120 120"/>
+
+              <body name="L_Shoulder_Roll_link" pos="-0.135 0.121 0.0" quat="0.9914449 -0.1305262 -2e-7 0.0000013">
+                <inertial pos=" 0.070635361 0.000008728 0.021900092" mass="2.50032" fullinertia="0.00863272476677071 0.0132642025634923 0.00888520200489139 -4.73430001189265E-05 -0.00349309796874907 -2.01578587820817E-06"/>
+                <geom class="visual_white" mesh="ALLEX_Left_Shoulder_Yaw_Frame"/>
+                <geom class="collision" mesh="ALLEX_Left_Shoulder_Yaw_Frame_Collision_1"/>
+                <geom class="collision" mesh="ALLEX_Left_Shoulder_Yaw_Frame_Collision_2"/>
+                <joint name="L_Shoulder_Roll_Joint" axis="1 0 0" range="-0.087266 3.752458" armature="0.04916348" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-120 120"/>
+
+                <body name="L_Upperarm_link" pos="0.136 0.0 0.032">
+                  <inertial pos="-0.008809193 0.000095713 -0.124234378" mass="2.6548" fullinertia="0.033036492817843 0.03318413682919 0.004638116554671 -0.000003416990856 0.00185422203595 0.000037728334327"/>
+                  <geom class="visual_white" mesh="ALLEX_Left_Upperarm_Frame"/>
+                  <geom class="collision" mesh="ALLEX_Left_Upperarm_Cover_Collision1"/>
+                  <geom class="collision" mesh="ALLEX_Left_Upperarm_Cover_Collision2"/>
+                  <geom class="collision" mesh="ALLEX_Left_Upperarm_Cover_Collision3"/>
+                  <joint name="L_Shoulder_Yaw_Joint" axis="0 0 1" range="-3.316126 1.745329" armature="0.04916348" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-120 120"/>
+
+                  <body name="L_Elbow_link" pos="0.03 0.0 -0.3255">
+                    <inertial pos=" 0.000668042 0.000566983 -0.024081487" mass="0.455094" fullinertia="0.00036981531119 0.000621352590801 0.000474644912724 -0.000017630048802 -0.000109095958233 -0.000007850830782"/>
+                    <geom class="visual_gray" mesh="ALLEX_Left_Elbow_Frame"/>
+                    <geom class="collision" mesh="ALLEX_Left_Elbow_Frame"/>
+                    <joint name="L_Elbow_Joint" axis="0 1 0" range="-2.879793 0.087266" armature="0.020954144" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-140 140"/>
+
+                    <body name="L_Forearm_link" pos="-0.045 0.0 -0.055">
+                      <inertial pos="-0.010634011 0.000151350 -0.100671382" mass="2.18716" fullinertia="0.0109997194021506 0.0117375154200131 0.00229115128184854 3.0564416522274E-06 -5.11395941956113E-05 -1.38666117422731E-05"/>
+                      <geom class="collision" mesh="ALLEX_Left_Forearm_Base_Cover"/>
+                      <geom class="collision" mesh="ALLEX_Left_Forearm_Lower_Cover"/>
+                      <geom class="collision" mesh="ALLEX_Left_Forearm_Middle_Frame"/>
+                      <geom class="collision" mesh="ALLEX_Left_Forearm_Cover"/>
+                      <geom class="visual_white" mesh="ALLEX_Left_Forearm_Base_Cover"/>
+                      <geom class="visual_white" mesh="ALLEX_Left_Forearm_Lower_Cover"/>
+                      <geom class="visual_white" mesh="ALLEX_Left_Forearm_Middle_Frame"/>
+                      <geom class="visual_white" mesh="ALLEX_Left_Forearm_Cover"/>
+                      <joint name="L_Wrist_Yaw_Joint" axis="0 0 1" range="-4.799655 0.610865" armature="0.020954144" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-80 80"/>
+
+                      <body name="L_Wrist_Roll_link" pos="-0.0085 0.0 -0.264">
+                        <inertial pos=" 0.010265874 0.000000789 -0.018981700" mass="0.04309631" fullinertia="0.000022104454611 0.000006569246176 0.000019529620671 0.000000000038845 0.000001659743097 -0.000000000144266"/>
+                        <geom class="visual_white" mesh="ALLEX_Left_Wrist_Roll_Frame"/>
+                        <geom class="visual_yellow" mesh="ALLEX_Left_Wrist_Roll_Frame"/>
+                        <joint name="L_Wrist_Roll_Joint" axis="1 0 0" range="-0.872665 0.872665" armature="0.001690604" frictionloss="0.6" damping="0.0" actuatorfrcrange="-35 35"/>
+
+                        <body name="L_Wrist_Pitch_link" pos="0.0135 0.0 -0.025">
+                          <inertial pos="-0.01521681 -0.000000021 -0.016529778" mass="0.057398861" fullinertia="0.000051081170288 0.000014335939213 0.000050236911036 0.000000010923664 -0.000002495472842 0.000000001128714"/>
+                          <geom class="visual_white" mesh="ALLEX_Left_Wrist_Pitch_Frame"/>
+                          <geom class="visual_yellow" mesh="ALLEX_Left_Wrist_Pitch_Frame"/>
+                          <joint name="L_Wrist_Pitch_Joint" axis="0 1 0" range="-1.396263 1.396263" armature="0.001369389" frictionloss="0.6" damping="0.0" actuatorfrcrange="-35 35"/>
+
+                          <!-- Left hand -->
+                          <body name="Left_Hand_Palm" pos="0.0 0.0 0.0">
+                            <inertial pos="-0.008463053 -0.000238956 -0.081246173" mass="0.553111" fullinertia="0.000618120901641644 0.000425025914075929 0.000375922056278372 6.55226502878027E-06 -6.23431894047748E-05 -3.43964553653504E-06"/>
+                            <geom class="visual_white" mesh="ALLEX_Left_Hand_Palm"/>
+                            <geom class="visual_white" mesh="ALLEX_Left_Hand_Palm_Thumb"/>
+                            <geom class="visual_black" mesh="ALLEX_Left_Hand_Palm_Pad"/>
+                            <geom class="collision" mesh="ALLEX_Left_Hand_Palm"/>
+                            <geom class="collision" mesh="ALLEX_Left_Hand_Palm_Thumb1"/>
+                            <geom class="visual_yellow" mesh="ALLEX_Left_Hand_Palm_Thumb2"/>
+                            <geom class="visual_yellow" mesh="ALLEX_Left_Hand_Palm_Thumb3"/>
+                            <geom class="collision" mesh="ALLEX_Left_Hand_Palm_Pad1"/>
+                            <geom class="collision" mesh="ALLEX_Left_Hand_Palm_Pad2"/>
+
+                            <body name="Left_Hand_base" pos="0.0 0.0 -0.09">
+
+                              <body name="L_Hand_Thumb_Yaw" pos="0.0142960 0.0210528 0.0311288" quat="0.9963968 0.0689951 0.0492078 0.0034074">
+                                <inertial pos="-0.000007001 0.002747764 -0.019328997" mass="0.032789432" fullinertia="0.000010440488701 0.000009681742624 0.000002297991945 -0.00000001240112 0.000000036004366 0.000002553184193"/>
+                                <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Pitch_Pivot"/>
+                                <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Pitch_Pivot"/>
+                                <joint name="L_Thumb_Yaw_Joint" pos="0.0 0.0 0.0" axis="0 0 -1" range="0.0 2.617994" armature="0.00801347" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="L_Hand_Thumb_Proximal" pos="0.0 0.0139985 -0.0323434" quat="0.9910033 -0.1338374 0 0">
+                                  <inertial pos="-0.000059101 0.015021659 0.007733297" mass="0.027231496" fullinertia="0.000008186438468 0.000002320218062 0.000006658158902 -0.000000009949629 0.00000000269572 -0.00000131713777"/>
+                                  <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Proximal_Frame"/>
+                                  <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Left_Hand_Thumb_Proximal_Pad"/>
+                                  <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Proximal_Link1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Proximal_Link2"/>
+                                  <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Proximal_Frame"/>
+                                  <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Proximal_Link1"/>
+                                  <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Proximal_Link2"/>
+                                  <joint name="L_Thumb_CMC_Joint" axis="-1 0 0" range="0.0 1.570796" armature="0.00339975" frictionloss="0.12" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <body name="L_Hand_Thumb_Middle" pos="0.0 0.0501371 0.0137939">
+                                    <inertial pos=" 0.000000485 0.006779487 -0.001769460" mass="0.009930981" fullinertia="0.00000081096366 0.000000329445737 0.000000882285304 0.000000000005488 -0.00000000001941 -0.000000036278983"/>
+                                    <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Middle_Frame"/>
+                                    <geom class="visual_black" mesh="ALLEX_Left_Hand_Thumb_Middle_Pad"/>
+                                    <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Middle_Link"/>
+                                    <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Middle_Frame"/>
+                                    <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Middle_Link"/>
+                                    <joint name="L_Thumb_MCP_Joint" axis="-1 0 0" range="0.0 1.570796" armature="0.00154476" frictionloss="0.06" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <body name="L_Hand_Thumb_Distal" pos="0.0 0.022 0.0">
+                                      <inertial pos=" 0.000003439 0.005724653 0.002653430" mass="0.00504" fullinertia="3.44024263705004E-07 1.05085424887076E-07 3.65353572162743E-07 -2.09169782597825E-10 7.54816127652245E-11 -1.82719266177377E-09"/>
+                                      <geom class="visual_white" mesh="ALLEX_Left_Hand_Thumb_Distal_Frame"/>
+                                      <geom class="visual_black" mesh="ALLEX_Left_Hand_Thumb_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Distal_Frame"/>
+                                      <geom class="collision" mesh="ALLEX_Left_Hand_Thumb_Distal_Pad"/>
+                                      <joint name="L_Thumb_IP_Joint" pos="0.0 0.0 0.0" axis="-1 0 0" armature="0.00154476" range="0.0 1.221730" frictionloss="0.06" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <body name="L_Hand_Index_Roll" pos="-0.0140330 0.0327204 -0.0433875" quat="0.9814957 0.0711627 -0.1706141 -0.049929">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="L_Index_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="L_Hand_Index_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02387" fullinertia="6.3383682701236E-06 6.6428838606716E-06 1.06397054466475E-06 -1.36452123248013E-09 9.87137492497325E-07 -7.5943089493633E-09"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="L_Index_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.1" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <body name="L_Hand_Index_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="L_Index_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <body name="L_Hand_Index_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="L_Index_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <body name="L_Hand_Middle_Roll" pos="-0.0151823 0.0108332 -0.0453043" quat="0.9844395 0.0237541 -0.1733108 -0.0166755">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="L_Middle_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="L_Hand_Middle_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596  0.000042198 -0.019211920" mass="0.02387" fullinertia="6.3383682701236E-06 6.6428838606716E-06 1.06397054466475E-06 -1.36452123248013E-09 9.87137492497325E-07 -7.5943089493633E-09"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="L_Middle_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.1" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <body name="L_Hand_Middle_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="L_Middle_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <body name="L_Hand_Middle_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="L_Middle_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <body name="L_Hand_Ring_Roll" pos="-0.0151823 -0.0111677 -0.0453043" quat="0.9844395 -0.0237541 -0.1733108 0.0166755">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="L_Ring_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="L_Hand_Ring_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02387" fullinertia="6.3383682701236E-06 6.6428838606716E-06 1.06397054466475E-06 -1.36452123248013E-09 9.87137492497325E-07 -7.5943089493633E-09"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="L_Ring_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.1" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <body name="L_Hand_Ring_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="L_Ring_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <body name="L_Hand_Ring_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="L_Ring_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <body name="L_Hand_Little_Roll" pos="-0.0140330 -0.0330549 -0.0433875" quat="0.9814957 -0.0711627 -0.1706141 0.049929">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="L_Little_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="L_Hand_Little_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02175" fullinertia="5.77542982300747E-06 6.05290004062033E-06 9.69474626998669E-07 -1.24333208238135E-09 8.99465457135183E-07 -6.91982487007339E-09"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="L_Little_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.1" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <body name="L_Hand_Little_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="L_Little_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <body name="L_Hand_Little_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="L_Little_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+
+            <!-- Right arm -->
+            <body name="R_Shoulder_Pitch_link" pos="0.0415 -0.0710988 0.1359705" quat="0.9914449 -0.1305262 -2e-7 0.0000013">
+              <inertial pos="-0.113658294 -0.050850686 -0.000243921" mass="0.91799" fullinertia="0.00299917349350943 0.00591555013402288 0.00619094106616406 -0.0013597887385476 3.29916698720736E-05 1.05435785870105E-05"/>
+              <geom class="visual_black" mesh="ALLEX_Right_Shoulder_Pitch_Frame"/>
+              <geom class="visual_yellow" mesh="ALLEX_Right_Shoulder_Pitch_Frame"/>
+              <joint name="R_Shoulder_Pitch_Joint" axis="0 1 0" range="-3.316126 1.745329" armature="0.04916348" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-120 120"/>
+
+              <body name="R_Shoulder_Roll_link" pos="-0.135 -0.121 0.0" quat="0.9914449 0.1305262 2e-7 0.0000013">
+                <inertial pos=" 0.070635361 0.000008728 0.021900092" mass="2.50032" fullinertia="0.00863272476677071 0.0132642025634923 0.00888520200489139 -4.73430001189265E-05 -0.00349309796874907 -2.01578587820817E-06"/>
+                <geom class="visual_white" mesh="ALLEX_Right_Shoulder_Yaw_Frame"/>
+                <geom class="collision" mesh="ALLEX_Right_Shoulder_Yaw_Frame_Collision_1"/>
+                <geom class="collision" mesh="ALLEX_Right_Shoulder_Yaw_Frame_Collision_2"/>
+                <joint name="R_Shoulder_Roll_Joint" axis="1 0 0" range="-3.752458 0.087266" armature="0.04916348" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-120 120"/>
+
+                <body name="R_Upperarm_link" pos="0.136 0.0 0.032">
+                  <inertial pos="-0.008809193 0.000095713 -0.124234378" mass="2.6548" fullinertia="0.033036492817843 0.03318413682919 0.004638116554671 -0.000003416990856 0.00185422203595 0.000037728334327"/>
+                  <geom class="visual_white" mesh="ALLEX_Right_Upperarm_Frame"/>
+                  <geom class="collision" mesh="ALLEX_Right_Upperarm_Cover_Collision1"/>
+                  <geom class="collision" mesh="ALLEX_Right_Upperarm_Cover_Collision2"/>
+                  <geom class="collision" mesh="ALLEX_Right_Upperarm_Cover_Collision3"/>
+                  <joint name="R_Shoulder_Yaw_Joint" axis="0 0 1" range="-1.745329 3.316126" armature="0.04916348" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-120 120"/>
+
+                  <body name="R_Elbow_link" pos="0.03 0.0 -0.3255">
+                    <inertial pos=" 0.000668042 0.000566983 -0.024081487" mass="0.455094" fullinertia="0.00036981531119 0.000621352590801 0.000474644912724 -0.000017630048802 -0.000109095958233 -0.000007850830782"/>
+                    <geom class="visual_gray" mesh="ALLEX_Right_Elbow_Frame"/>
+                    <geom class="collision" mesh="ALLEX_Right_Elbow_Frame"/>
+                    <joint name="R_Elbow_Joint" axis="0 1 0" range="-2.879793 0.087266" armature="0.020954144" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-140 140"/>
+
+                    <body name="R_Forearm_link" pos="-0.045 0.0 -0.055">
+                      <inertial pos="-0.010634011 0.000151350 -0.100671382" mass="2.18716" fullinertia="0.0109997194021506 0.0117375154200131 0.00229115128184854 3.0564416522274E-06 -5.11395941956113E-05 -1.38666117422731E-05"/>
+                      <geom class="collision" mesh="ALLEX_Right_Forearm_Base_Cover"/>
+                      <geom class="collision" mesh="ALLEX_Right_Forearm_Lower_Cover"/>
+                      <geom class="collision" mesh="ALLEX_Right_Forearm_Middle_Frame"/>
+                      <geom class="collision" mesh="ALLEX_Right_Forearm_Cover"/>
+                      <geom class="visual_white" mesh="ALLEX_Right_Forearm_Base_Cover"/>
+                      <geom class="visual_white" mesh="ALLEX_Right_Forearm_Lower_Cover"/>
+                      <geom class="visual_white" mesh="ALLEX_Right_Forearm_Middle_Frame"/>
+                      <geom class="visual_white" mesh="ALLEX_Right_Forearm_Cover"/>
+                      <joint name="R_Wrist_Yaw_Joint" axis="0 0 1" range="-0.610865 4.799655" armature="0.020954144" frictionloss="0.5057" damping="0.19285" actuatorfrcrange="-80 80"/>
+
+                      <body name="R_Wrist_Roll_link" pos="-0.0085 0.0 -0.264">
+                        <inertial pos=" 0.010265874 0.000000789 -0.018981700" mass="0.04309631" fullinertia="0.000022104454611 0.000006569246176 0.000019529620671 0.000000000038845 0.000001659743097 -0.000000000144266"/>
+                        <geom class="visual_white" mesh="ALLEX_Right_Wrist_Roll_Frame"/>
+                        <geom class="visual_yellow" mesh="ALLEX_Right_Wrist_Roll_Frame"/>
+                        <joint name="R_Wrist_Roll_Joint" axis="1 0 0" range="-0.872665 0.872665" armature="0.001690604" frictionloss="0.6" damping="0.0" actuatorfrcrange="-35 35"/>
+
+                        <body name="R_Wrist_Pitch_link" pos="0.0135 0.0 -0.025">
+                          <inertial pos="-0.01521681 -0.000000021 -0.016529778" mass="0.057398861" fullinertia="0.000051081170288 0.000014335939213 0.000050236911036 0.000000010923664 -0.000002495472842 0.000000001128714"/>
+                          <geom class="visual_white" mesh="ALLEX_Right_Wrist_Pitch_Frame"/>
+                          <geom class="visual_yellow" mesh="ALLEX_Right_Wrist_Pitch_Frame"/>
+                          <joint name="R_Wrist_Pitch_Joint" axis="0 1 0" range="-1.396263 1.396263" armature="0.001369389" frictionloss="0.6" damping="0.0" actuatorfrcrange="-35 35"/>
+
+                          <!-- Right hand -->
+                          <body name="Right_Hand_Palm" pos="0.0 0.0 0.0">
+                            <inertial pos="-0.008463053 0.000238956 -0.081246173" mass="0.553111" fullinertia="0.000618120901641644 0.000425025914075929 0.000375922056278372 -6.55226502878027E-06 -6.23431894047748E-05 3.43964553653504E-06"/>
+
+                            <geom class="visual_white" mesh="ALLEX_Right_Hand_Palm"/>
+                            <geom class="visual_white" mesh="ALLEX_Right_Hand_Palm_Thumb"/>
+                            <geom class="visual_black" mesh="ALLEX_Right_Hand_Palm_Pad"/>
+                            <geom class="visual_yellow" mesh="ALLEX_Right_Hand_Palm_Thumb1"/>
+                            <geom class="visual_yellow" mesh="ALLEX_Right_Hand_Palm_Thumb2"/>
+
+                            <geom class="collision" mesh="ALLEX_Right_Hand_Palm"/>
+                            <geom class="collision" mesh="ALLEX_Right_Hand_Palm_Thumb3"/>
+                            <geom class="collision" mesh="ALLEX_Right_Hand_Palm_Pad1"/>
+                            <geom class="collision" mesh="ALLEX_Right_Hand_Palm_Pad2"/>
+
+                            <!-- Right palm site -->
+                            <site name="rpalm" type="sphere" pos="0.0 0.0 -0.08" size="0.04" rgba="1 0 0 0.5" />
+
+                            <body name="Right_Hand_base" pos="0.0 0.0 -0.09">
+
+                              <!-- Right thumb -->
+                              <body name="R_Hand_Thumb_Yaw" pos="0.0142960 -0.0210528 0.0311288" quat="0.9963968 -0.0689951 0.0492078 -0.0034074">
+                                <inertial pos="-0.000007001 -0.002747764 -0.019328997" mass="0.032789432" fullinertia="0.000010440488701 0.000009681742624 0.000002297991945 0.00000001240112 0.000000036004366 -0.000002553184193"/>
+                                <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Pitch_Pivot"/>
+                                <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Pitch_Pivot"/>
+                                <joint name="R_Thumb_Yaw_Joint" axis="0 0 -1" range="-2.617994 0.0" armature="0.00801347" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="R_Hand_Thumb_Proximal" pos="0.0 -0.0139985 -0.0323434" quat="0.9910033 0.1338374 0 0">
+                                  <inertial pos="-0.000059101 -0.015021659 0.007733297" mass="0.027231496" fullinertia="0.000008186438468 0.000002320218062 0.000006658158902 0.000000009949629 0.00000000269572 0.00000131713777"/>
+
+                                  <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Proximal_Frame"/>
+                                  <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Right_Hand_Thumb_Proximal_Pad"/>
+                                  <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Proximal_Link1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Proximal_Link2"/>
+                                  <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Proximal_Frame"/>
+                                  <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Proximal_Link1"/>
+                                  <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Proximal_Link2"/>
+                                  <joint name="R_Thumb_CMC_Joint" axis="1 0 0" range="0.0 1.570796" armature="0.00339975" frictionloss="0.12" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <!-- Right thumb mcp site -->
+                                  <site name="rthumb_mcp" type="sphere" pos="0.0 0.0 0.0" size="0.03" rgba="1 0 0 0.5" />
+
+                                  <body name="R_Hand_Thumb_Middle" pos="0.0 -0.0501371 0.0137939">
+                                    <inertial pos=" 0.000000485 -0.006779487 -0.001769460" mass="0.009930981" fullinertia="0.00000081096366 0.000000329445737 0.000000882285304 -0.000000000005488 -0.00000000001941 0.000000036278983"/>
+
+                                    <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Middle_Frame"/>
+                                    <geom class="visual_black" mesh="ALLEX_Right_Hand_Thumb_Middle_Pad"/>
+                                    <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Middle_Link"/>
+                                    <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Middle_Frame"/>
+                                    <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Middle_Link"/>
+                                    <joint name="R_Thumb_MCP_Joint" axis="1 0 0" range="0.0 1.570796" armature="0.00154476" frictionloss="0.06" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <!-- Right thumb ip site -->
+                                    <site name="rthumb_ip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                    <body name="R_Hand_Thumb_Distal" pos="0.0 -0.022 0.0">
+                                      <inertial pos=" 0.000003439 -0.005724653 0.002653430" mass="0.00504" fullinertia="3.44024263705004E-07 1.05085424887076E-07 3.65353572162743E-07 2.09169782597825E-10 7.54816127652245E-11 1.82719266177377E-09"/>
+                                      <geom class="visual_white" mesh="ALLEX_Right_Hand_Thumb_Distal_Frame"/>
+                                      <geom class="visual_black" mesh="ALLEX_Right_Hand_Thumb_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Distal_Frame"/>
+                                      <geom class="collision" mesh="ALLEX_Right_Hand_Thumb_Distal_Pad"/>
+                                      <joint name="R_Thumb_IP_Joint" pos="0.0 0.0 0.0" axis="1 0 0" range="0.0 1.221730" armature="0.00154476" frictionloss="0.06" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                      <!-- Right thumb tip site -->
+                                      <site name="rthumb_tip" type="sphere" pos="0.0 -0.01 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <!-- Right index -->
+                              <body name="R_Hand_Index_Roll" pos="-0.0140330 -0.0330549 -0.0433875" quat="0.9814957 -0.0711627 -0.1706141 0.049929">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="R_Index_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="R_Hand_Index_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02387" fullinertia="6.3383682701236E-06 6.6428838606716E-06 1.06397054466475E-06 -1.36452123248013E-09 9.87137492497325E-07 -7.5943089493633E-09"/>
+
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="R_Index_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.05" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <!-- Right index mcp site -->
+                                  <site name="rindex_mcp" type="sphere" pos="0.0 0.0 0.0" size="0.03" rgba="1 0 0 0.5" />
+
+                                  <body name="R_Hand_Index_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="R_Index_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.1" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <!-- Right index pip site -->
+                                    <site name="rindex_pip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                    <body name="R_Hand_Index_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="R_Index_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                      <!-- Right index dip site -->
+                                      <site name="rindex_dip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                      <!-- Right index tip site -->
+                                      <site name="rindex_tip" type="sphere" pos="0.0 0.0 -0.015" size="0.02" rgba="1 0 0 0.5" />
+
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <!-- Right middle -->
+                              <body name="R_Hand_Middle_Roll" pos="-0.0151823 -0.0111677 -0.0453043" quat="0.9844395 -0.0237541 -0.1733108 0.0166755">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="R_Middle_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="R_Hand_Middle_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02387" fullinertia="6.3383682701236E-06 6.6428838606716E-06 1.06397054466475E-06 -1.36452123248013E-09 9.87137492497325E-07 -7.5943089493633E-09"/>
+
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="R_Middle_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.05" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <!-- Right middle mcp site -->
+                                  <site name="rmiddle_mcp" type="sphere" pos="0.0 0.0 0.0" size="0.03" rgba="1 0 0 0.5" />
+
+                                  <body name="R_Hand_Middle_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="R_Middle_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.1" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <!-- Right middle pip site -->
+                                    <site name="rmiddle_pip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                    <body name="R_Hand_Middle_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="R_Middle_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                      <!-- Right middle dip site -->
+                                      <site name="rmiddle_dip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                      <!-- Right middle tip site -->
+                                      <site name="rmiddle_tip" type="sphere" pos="0.0 0.0 -0.015" size="0.02" rgba="1 0 0 0.5" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+
+                              <!-- Right ring -->
+                              <body name="R_Hand_Ring_Roll" pos="-0.0151823 0.0108332 -0.0453043" quat="0.9844395 0.0237541 -0.1733108 -0.0166755">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="R_Ring_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="R_Hand_Ring_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02387" fullinertia="6.3383682701236E-06 6.6428838606716E-06 1.06397054466475E-06 -1.36452123248013E-09 9.87137492497325E-07 -7.5943089493633E-09"/>
+
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="R_Ring_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.05" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <!-- Right ring mcp site -->
+                                  <site name="rring_mcp" type="sphere" pos="0.0 0.0 0.0" size="0.03" rgba="1 0 0 0.5" />
+
+                                  <body name="R_Hand_Ring_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="R_Ring_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.1" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <!-- Right ring pip site -->
+                                    <site name="rring_pip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                    <body name="R_Hand_Ring_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="R_Ring_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                      <!-- Right ring dip site -->
+                                      <site name="rring_dip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                      <!-- Right ring tip site -->
+                                      <site name="rring_tip" type="sphere" pos="0.0 0.0 -0.015" size="0.02" rgba="1 0 0 0.5" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+                              <!-- Right little -->
+                              <body name="R_Hand_Little_Roll" pos="-0.0140330 0.0327204 -0.0433875" quat="0.9814957 0.0711627 -0.1706141 -0.049929">
+                                <inertial pos="-0.001315071 0.000324987 -0.001749841" mass="0.00611" fullinertia="1.45196411282484E-07 1.03672696671305E-07 1.87274057770961E-07 -3.9603216296369E-09 -2.35910881630096E-08 -5.67549797652972E-09"/>
+                                <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <geom class="collision" mesh="ALLEX_Hand_Proximal_Roll"/>
+                                <joint name="R_Little_Roll_Joint" axis="1 0 0" range="-0.523599 0.523599" armature="1.53134E-04" frictionloss="0.05" damping="0.0" actuatorfrcrange="-0.5 0.5"/>
+
+                                <body name="R_Hand_Little_Proximal" pos="-0.003817 0.0 -0.0061246" quat="0.9848078 0 0.1736482 0">
+                                  <inertial pos="-0.005831596 0.000042198 -0.019211920" mass="0.02175" fullinertia="5.77542982300747E-06 6.05290004062033E-06 9.69474626998669E-07 -1.24333208238135E-09 8.99465457135183E-07 -6.91982487007339E-09"/>
+
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="visual_white" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="visual_black" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame1"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Frame2"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Cover"/>
+                                  <geom class="collision" mesh="ALLEX_Hand_Proximal_Pad"/>
+                                  <joint name="R_Little_MCP_Joint" axis="0 -1 0" range="-0.174532 1.570796" armature="0.00388912" frictionloss="0.05" damping="0.0" actuatorfrcrange="-3.4 3.4"/>
+
+                                  <!-- Right little mcp site -->
+                                  <site name="rlittle_mcp" type="sphere" pos="0.0 0.0 0.0" size="0.03" rgba="1 0 0 0.5" />
+
+                                  <body name="R_Hand_Little_Middle" pos="0.0 0.0 -0.052">
+                                    <inertial pos="-0.001717810 0.000001917 -0.006013520" mass="0.00977" fullinertia="7.3322539027813E-07 6.70752594517095E-07 3.2562965765922E-07 -6.37352723061326E-11 -5.12883458733187E-08 1.69253789679904E-10"/>
+
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="visual_white" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="visual_black" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame1"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Frame2"/>
+                                    <geom class="collision" mesh="ALLEX_Hand_Middle_Pad"/>
+                                    <joint name="R_Little_PIP_Joint" axis="0 -1 0" range="0.0 1.7453293" armature="0.00154476" frictionloss="0.1" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                    <!-- Right little pip site -->
+                                    <site name="rlittle_pip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                    <body name="R_Hand_Little_Distal" pos="0.0019932 0.0 -0.0188952">
+                                      <inertial pos="-0.002635323 -0.000003528 -0.00600072" mass="0.00504" fullinertia="3.48803976798582E-07 3.28166682630605E-07 1.03740422692498E-07 7.5160593147359E-11 -2.82875386829195E-09 -2.04261482646162E-10"/>
+
+                                      <geom class="visual_white" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="visual_black" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Frame1"/>
+                                      <geom class="collision" mesh="ALLEX_Hand_Distal_Pad"/>
+                                      <joint name="R_Little_DIP_Joint" axis="0 -1 0" range="0.0 1.448623" armature="0.00154476" frictionloss="0.05" damping="0.0" actuatorfrcrange="-1.4 1.4"/>
+
+                                      <!-- Right little dip site -->
+                                      <site name="rlittle_dip" type="sphere" pos="0.0 0.0 0.0" size="0.02" rgba="1 0 0 0.5" />
+
+                                      <!-- Right little tip site -->
+                                      <site name="rlittle_tip" type="sphere" pos="0.0 0.0 -0.015" size="0.02" rgba="1 0 0 0.5" />
+                                    </body>
+                                  </body>
+                                </body>
+                              </body>
+
+
+
+                            </body>
+                          </body>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="Waist_Pitch_Back_link" pos="-0.04 0.0 0.15">
+          <inertial pos="-0.012 0 0.15" mass="1.0" diaginertia="0.00266 0.00266 0.00075" />
+          <geom class="visual_gray" mesh="ALLEX_Waist_Back_Cover"/>
+          <geom class="visual_yellow" mesh="ALLEX_Waist_Back_Cover"/>
+          <!-- <geom class="collision" mesh="ALLEX_Waist_Back_Cover"/> -->
+          <geom class="visual_black" mesh="ALLEX_Waist_Back_Link"/>
+          <geom class="visual_yellow" mesh="ALLEX_Waist_Back_Cover"/>
+          <!-- <geom class="collision" mesh="ALLEX_Waist_Back_Link"/> -->
+          <joint name="Waist_Pitch_Dummy_Joint" axis="0 1 0" range="-0.523598 0.785398" damping="10"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- Actuators and sensors -->
+  <actuator>
+    <!-- Hip and Waist -->
+    <position name="Waist_Yaw_Position" kp="800" dampratio="1" ctrlrange="-2.792526 2.792526" joint="Waist_Yaw_Joint"/>
+    <position name="Waist_Pitch_Lower_Position" kp="800" dampratio="1" ctrlrange="-0.523598 0.785398" joint="Waist_Pitch_Lower_Joint"/>
+
+    <!-- Head -->
+    <position name="Neck_Pitch_Position" kp="100" dampratio="1" ctrlrange="-0.785398 0.785398" joint="Neck_Pitch_Joint"/>
+    <position name="Neck_Yaw_Position" kp="100" dampratio="1" ctrlrange="-1.570796 1.570796" joint="Neck_Yaw_Joint"/>
+
+    <!-- Left arm -->
+    <position name="L_Shoulder_Pitch_Position" kp="200" dampratio="1" ctrlrange="-3.316126 1.745329" joint="L_Shoulder_Pitch_Joint"/>
+    <position name="L_Shoulder_Roll_Position" kp="200" dampratio="1" ctrlrange="-0.087266 3.752458" joint="L_Shoulder_Roll_Joint"/>
+    <position name="L_Shoulder_Yaw_Position" kp="200" dampratio="1" ctrlrange="-3.316126 1.745329" joint="L_Shoulder_Yaw_Joint"/>
+    <position name="L_Elbow_Position" kp="200" dampratio="1" ctrlrange="-2.879793 0.087266" joint="L_Elbow_Joint"/>
+    <position name="L_Wrist_Yaw_Position" kp="200" dampratio="1" ctrlrange="-4.799655 0.610865" joint="L_Wrist_Yaw_Joint"/>
+    <position name="L_Wrist_Roll_Position" kp="200" dampratio="1" ctrlrange="-0.872665 0.872665" joint="L_Wrist_Roll_Joint"/>
+    <position name="L_Wrist_Pitch_Position" kp="200" dampratio="1" ctrlrange="-1.396263 1.396263" joint="L_Wrist_Pitch_Joint"/>
+
+    <!-- Right arm -->
+    <position name="R_Shoulder_Pitch_Position" kp="200" dampratio="1" ctrlrange="-3.316126 1.745329" joint="R_Shoulder_Pitch_Joint"/>
+    <position name="R_Shoulder_Roll_Position" kp="200" dampratio="1" ctrlrange="-3.752458 0.087266" joint="R_Shoulder_Roll_Joint"/>
+    <position name="R_Shoulder_Yaw_Position" kp="200" dampratio="1" ctrlrange="-1.745329 3.316126" joint="R_Shoulder_Yaw_Joint"/>
+    <position name="R_Elbow_Position" kp="200" dampratio="1" ctrlrange="-2.879793 0.087266" joint="R_Elbow_Joint"/>
+    <position name="R_Wrist_Yaw_Position" kp="200" dampratio="1" ctrlrange="-0.610865 4.799655" joint="R_Wrist_Yaw_Joint"/>
+    <position name="R_Wrist_Roll_Position" kp="200" dampratio="1" ctrlrange="-0.872665 0.872665" joint="R_Wrist_Roll_Joint"/>
+    <position name="R_Wrist_Pitch_Position" kp="200" dampratio="1" ctrlrange="-1.396263 1.396263" joint="R_Wrist_Pitch_Joint"/>
+
+    <!-- Left hand -->
+    <position class="position" name="L_Thumb_Yaw_Position" kp="100" dampratio="1" ctrlrange="0.0 2.617994" joint="L_Thumb_Yaw_Joint"/>
+    <position class="position" name="L_Thumb_CMC_Position" kp="100" dampratio="1" ctrlrange="0.0 1.570796" joint="L_Thumb_CMC_Joint"/>
+    <position class="position" name="L_Thumb_MCP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.570796" joint="L_Thumb_MCP_Joint"/>
+    <position class="position" name="L_Index_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="L_Index_Roll_Joint"/>
+    <position class="position" name="L_Index_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="L_Index_MCP_Joint"/>
+    <position class="position" name="L_Index_PIP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.7453293" joint="L_Index_PIP_Joint"/>
+    <position class="position" name="L_Middle_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="L_Middle_Roll_Joint"/>
+    <position class="position" name="L_Middle_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="L_Middle_MCP_Joint"/>
+    <position class="position" name="L_Middle_PIP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.7453293" joint="L_Middle_PIP_Joint"/>
+    <position class="position" name="L_Ring_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="L_Ring_Roll_Joint"/>
+    <position class="position" name="L_Ring_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="L_Ring_MCP_Joint"/>
+    <position class="position" name="L_Ring_PIP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.7453293" joint="L_Ring_PIP_Joint"/>
+    <position class="position" name="L_Little_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="L_Little_Roll_Joint"/>
+    <position class="position" name="L_Little_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="L_Little_MCP_Joint"/>
+    <position class="position" name="L_Little_PIP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.7453293" joint="L_Little_PIP_Joint"/>
+    <!-- <motor class="motor" name="L_Thumb_Yaw_Motor" ctrlrange="-0.5 0.5" joint="L_Thumb_Yaw_Joint"/>
+        <motor class="motor" name="L_Thumb_CMC_Motor" ctrlrange="-3.4 3.4" joint="L_Thumb_CMC_Joint"/>
+        <motor class="motor" name="L_Thumb_MCP_Motor" ctrlrange="-1.4 1.4" joint="L_Thumb_MCP_Joint"/>
+        <motor class="motor" name="L_Index_Roll_Motor" ctrlrange="-0.5 0.5" joint="L_Index_Roll_Joint"/>
+        <motor class="motor" name="L_Index_MCP_Motor" ctrlrange="-3.4 3.4" joint="L_Index_MCP_Joint"/>
+        <motor class="motor" name="L_Index_PIP_Motor" ctrlrange="-1.4 1.4" joint="L_Index_PIP_Joint"/>
+        <motor class="motor" name="L_Middle_Roll_Motor" ctrlrange="-0.5 0.5" joint="L_Middle_Roll_Joint"/>
+        <motor class="motor" name="L_Middle_MCP_Motor" ctrlrange="-3.4 3.4" joint="L_Middle_MCP_Joint"/>
+        <motor class="motor" name="L_Middle_PIP_Motor" ctrlrange="-1.4 1.4" joint="L_Middle_PIP_Joint"/>
+        <motor class="motor" name="L_Ring_Roll_Motor" ctrlrange="-0.5 0.5" joint="L_Ring_Roll_Joint"/>
+        <motor class="motor" name="L_Ring_MCP_Motor" ctrlrange="-3.4 3.4" joint="L_Ring_MCP_Joint"/>
+        <motor class="motor" name="L_Ring_PIP_Motor" ctrlrange="-1.4 1.4" joint="L_Ring_PIP_Joint"/>
+        <motor class="motor" name="L_Little_Roll_Motor" ctrlrange="-0.5 0.5" joint="L_Little_Roll_Joint"/>
+        <motor class="motor" name="L_Little_MCP_Motor" ctrlrange="-3.4 3.4" joint="L_Little_MCP_Joint"/>
+        <motor class="motor" name="L_Little_PIP_Motor" ctrlrange="-1.4 1.4" joint="L_Little_PIP_Joint"/> -->
+
+    <!-- Right hand -->
+    <position class="position" name="R_Thumb_Yaw_Position" kp="100" dampratio="1" ctrlrange="-2.617994 0.0" joint="R_Thumb_Yaw_Joint"/>
+    <position class="position" name="R_Thumb_CMC_Position" kp="100" dampratio="1" ctrlrange="0.0 1.570796" joint="R_Thumb_CMC_Joint"/>
+    <position class="position" name="R_Thumb_MCP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.570796" joint="R_Thumb_MCP_Joint"/>
+    <position class="position" name="R_Index_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="R_Index_Roll_Joint"/>
+    <position class="position" name="R_Index_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="R_Index_MCP_Joint"/>
+    <position class="position" name="R_Index_PIP_Position" kp="100" dampratio="1" ctrlrange=" 0.0 1.7453293" joint="R_Index_PIP_Joint"/>
+    <position class="position" name="R_Middle_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="R_Middle_Roll_Joint"/>
+    <position class="position" name="R_Middle_MCP_position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="R_Middle_MCP_Joint"/>
+    <position class="position" name="R_Middle_PIP_Position" kp="100" dampratio="1" ctrlrange=" 0.0 1.7453293" joint="R_Middle_PIP_Joint"/>
+    <position class="position" name="R_Ring_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="R_Ring_Roll_Joint"/>
+    <position class="position" name="R_Ring_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="R_Ring_MCP_Joint"/>
+    <position class="position" name="R_Ring_PIP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.7453293" joint="R_Ring_PIP_Joint"/>
+    <position class="position" name="R_Little_Roll_Position" kp="100" dampratio="1" ctrlrange="-0.523599 0.523599" joint="R_Little_Roll_Joint"/>
+    <position class="position" name="R_Little_MCP_Position" kp="100" dampratio="1" ctrlrange="-0.174532 1.570796" joint="R_Little_MCP_Joint"/>
+    <position class="position" name="R_Little_PIP_Position" kp="100" dampratio="1" ctrlrange="0.0 1.7453293" joint="R_Little_PIP_Joint"/>
+    <!-- <motor class="motor" name="R_Thumb_Yaw_Motor" ctrlrange="-0.5 0.5" joint="R_Thumb_Yaw_Joint"/>
+        <motor class="motor" name="R_Thumb_CMC_Motor" ctrlrange="-3.4 3.4" joint="R_Thumb_CMC_Joint"/>
+        <motor class="motor" name="R_Thumb_MCP_Motor" ctrlrange="-1.4 1.4" joint="R_Thumb_MCP_Joint"/>
+        <motor class="motor" name="R_Index_Roll_Motor" ctrlrange="-0.5 0.5" joint="R_Index_Roll_Joint"/>
+        <motor class="motor" name="R_Index_MCP_Motor" ctrlrange="-3.4 3.4" joint="R_Index_MCP_Joint"/>
+        <motor class="motor" name="R_Index_PIP_Motor" ctrlrange="-1.4 1.4" joint="R_Index_PIP_Joint"/>
+        <motor class="motor" name="R_Middle_Roll_Motor" ctrlrange="-0.5 0.5" joint="R_Middle_Roll_Joint"/>
+        <motor class="motor" name="R_Middle_MCP_Motor" ctrlrange="-3.4 3.4" joint="R_Middle_MCP_Joint"/>
+        <motor class="motor" name="R_Middle_PIP_Motor" ctrlrange="-1.4 1.4" joint="R_Middle_PIP_Joint"/>
+        <motor class="motor" name="R_Ring_Roll_Motor" ctrlrange="-0.5 0.5" joint="R_Ring_Roll_Joint"/>
+        <motor class="motor" name="R_Ring_MCP_Motor" ctrlrange="-3.4 3.4" joint="R_Ring_MCP_Joint"/>
+        <motor class="motor" name="R_Ring_PIP_Motor" ctrlrange="-1.4 1.4" joint="R_Ring_PIP_Joint"/>
+        <motor class="motor" name="R_Little_Roll_Motor" ctrlrange="-0.5 0.5" joint="R_Little_Roll_Joint"/>
+        <motor class="motor" name="R_Little_MCP_Motor" ctrlrange="-3.4 3.4" joint="R_Little_MCP_Joint"/>
+        <motor class="motor" name="R_Little_PIP_Motor" ctrlrange="-1.4 1.4" joint="R_Little_PIP_Joint"/> -->
+  </actuator>
+
+  <!-- Equality constraints (couplings) -->
+  <equality>
+    <!-- Hip and Waist -->
+    <joint joint1="Waist_Pitch_Lower_Joint" joint2="Waist_Pitch_Upper_Joint" polycoef="0 -1 0 0 0" active="true"/>
+    <joint joint1="Waist_Pitch_Lower_Joint" joint2="Waist_Pitch_Dummy_Joint" polycoef="0  1 0 0 0" active="true"/>
+
+    <!-- Head -->
+    <!-- XXX -->
+
+    <!-- Left arm -->
+    <!-- XXX -->
+
+    <!-- Left hand -->
+    <joint joint1="L_Thumb_IP_Joint" joint2="L_Thumb_MCP_Joint" polycoef="-0.0015 0.6651 0.0186 0.1224 -0.0696" active="true"/>
+    <joint joint1="L_Index_DIP_Joint" joint2="L_Index_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+    <joint joint1="L_Middle_DIP_Joint" joint2="L_Middle_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+    <joint joint1="L_Ring_DIP_Joint" joint2="L_Ring_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+    <joint joint1="L_Little_DIP_Joint" joint2="L_Little_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+
+    <!-- Right arm -->
+    <!-- XXX -->
+
+    <!-- Right hand -->
+    <joint joint1="R_Thumb_IP_Joint" joint2="R_Thumb_MCP_Joint" polycoef="-0.0015 0.6651 0.0186 0.1224 -0.0696" active="true"/>
+    <joint joint1="R_Index_DIP_Joint" joint2="R_Index_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+    <joint joint1="R_Middle_DIP_Joint" joint2="R_Middle_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+    <joint joint1="R_Ring_DIP_Joint" joint2="R_Ring_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+    <joint joint1="R_Little_DIP_Joint" joint2="R_Little_PIP_Joint" polycoef="-0.003849 0.4269 0.06589 0.136 -0.04621" active="true"/>
+
+  </equality>
+
+  <!-- Sensors -->
+  <sensor>
+
+    <touch name="touch_rpalm" site="rpalm" />
+    <touch name="touch_rthumb_mcp" site="rthumb_mcp" />
+    <touch name="touch_rthumb_ip" site="rthumb_ip" />
+    <touch name="touch_rthumb_tip" site="rthumb_tip" />
+
+    <touch name="touch_rindex_mcp" site="rindex_mcp" />
+    <touch name="touch_rindex_pip" site="rindex_pip" />
+    <touch name="touch_rindex_dip" site="rindex_dip" />
+    <touch name="touch_rindex_tip" site="rindex_tip" />
+
+    <touch name="touch_rmiddle_mcp" site="rmiddle_mcp" />
+    <touch name="touch_rmiddle_pip" site="rmiddle_pip" />
+    <touch name="touch_rmiddle_dip" site="rmiddle_dip" />
+    <touch name="touch_rmiddle_tip" site="rmiddle_tip" />
+
+    <touch name="touch_rring_mcp" site="rring_mcp" />
+    <touch name="touch_rring_pip" site="rring_pip" />
+    <touch name="touch_rring_dip" site="rring_dip" />
+    <touch name="touch_rring_tip" site="rring_tip" />
+
+    <touch name="touch_rlittle_mcp" site="rlittle_mcp" />
+    <touch name="touch_rlittle_pip" site="rlittle_pip" />
+    <touch name="touch_rlittle_dip" site="rlittle_dip" />
+    <touch name="touch_rlittle_tip" site="rlittle_tip" />
+
+  </sensor>
+
+</mujoco>

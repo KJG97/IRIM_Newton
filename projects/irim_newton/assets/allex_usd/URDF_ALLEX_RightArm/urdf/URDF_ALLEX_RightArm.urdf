@@ -1,0 +1,506 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="URDF_ALLEX_RightArm">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.020456 -0.00088282 0.38854"
+        rpy="0 0 0" />
+      <mass
+        value="6.5591" />
+      <inertia
+        ixx="0.11249"
+        ixy="-2.2196E-05"
+        ixz="-4.2006E-05"
+        iyy="0.035181"
+        iyz="0.00017152"
+        izz="0.094417" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="shoulder_pitch">
+    <inertial>
+      <origin
+        xyz="-0.108557440546284 1.41422957161685E-05 -0.0500707282356584"
+        rpy="0 0 0" />
+      <mass
+        value="0.30375707929662" />
+      <inertia
+        ixx="0.000727342427964196"
+        ixy="-1.19315424397264E-08"
+        ixz="-9.54832350933797E-05"
+        iyy="0.00108174201763599"
+        iyz="-6.16123827267066E-08"
+        izz="0.00135021809601606" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/shoulder_pitch.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/shoulder_pitch.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="SP"
+    type="revolute">
+    <origin
+      xyz="0.1415 -0.0699 1.1832"
+      rpy="-1.8326 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="shoulder_pitch" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.31613"
+      upper="1.74533"
+      effort="200"
+      velocity="10" />
+  </joint>
+  <link
+    name="shoulder_roll">
+    <inertial>
+      <origin
+        xyz="-0.00658011582242968 9.86959996518433E-06 0.0667714155662714"
+        rpy="0 0 0" />
+      <mass
+        value="0.250426928917832" />
+      <inertia
+        ixx="0.00100080987728438"
+        ixy="-3.67392000874271E-08"
+        ixz="6.2802719364131E-05"
+        iyy="0.000778397515415368"
+        iyz="1.17477708495455E-07"
+        izz="0.000769945212764268" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/shoulder_roll.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/shoulder_roll.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="SR"
+    type="revolute">
+    <origin
+      xyz="-0.1364 0 -0.12089"
+      rpy="1.5708 -0.2618 1.5708" />
+    <parent
+      link="shoulder_pitch" />
+    <child
+      link="shoulder_roll" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-3.75246"
+      upper="0.0872665"
+      effort="180"
+      velocity="10" />
+  </joint>
+  <link
+    name="shoulder_yaw">
+    <inertial>
+      <origin
+        xyz="0.00393901412176233 -1.60354069783653E-06 -0.16791442773271"
+        rpy="0 0 0" />
+      <mass
+        value="0.486620324198405" />
+      <inertia
+        ixx="0.00449165977586335"
+        ixy="-1.40276994149623E-06"
+        ixz="0.000109207536009794"
+        iyy="0.00500598783494019"
+        iyz="2.00643396027092E-06"
+        izz="0.000831958403483908" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/shoulder_yaw.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/shoulder_yaw.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="SY"
+    type="revolute">
+    <origin
+      xyz="-0.033028 -0.00010326 0.1364"
+      rpy="0 -1.5708 0" />
+    <parent
+      link="shoulder_roll" />
+    <child
+      link="shoulder_yaw" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.74533"
+      upper="3.31613"
+      effort="150"
+      velocity="10" />
+  </joint>
+  <link
+    name="elbow">
+    <inertial>
+      <origin
+        xyz="-0.033459994229308 0.0032838591901071 -8.95842471215769E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.0886267138392492" />
+      <inertia
+        ixx="0.000119770600341942"
+        ixy="3.05655716610167E-06"
+        ixz="-5.63039998610608E-09"
+        iyy="7.60604837008356E-05"
+        iyz="2.9485910504365E-09"
+        izz="9.69678765240406E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/elbow.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/elbow.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="EP"
+    type="revolute">
+    <origin
+      xyz="0.0301 0 -0.327"
+      rpy="-1.5708 0 0" />
+    <parent
+      link="shoulder_yaw" />
+    <child
+      link="elbow" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-2.87979"
+      upper="0.0872665"
+      effort="150"
+      velocity="10" />
+  </joint>
+  <link
+    name="forearm">
+    <inertial>
+      <origin
+        xyz="-0.00366649876918209 -9.97917465305753E-05 -0.110349311448614"
+        rpy="0 0 0" />
+      <mass
+        value="0.305067427837473" />
+      <inertia
+        ixx="0.00190293040684571"
+        ixy="1.68432068795325E-07"
+        ixz="-1.8828600467237E-05"
+        iyy="0.00163172677842043"
+        iyz="-9.69285237900309E-08"
+        izz="0.000479571078759277" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/forearm.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/forearm.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="EY"
+    type="revolute">
+    <origin
+      xyz="-0.0451 0.0465 0"
+      rpy="1.5708 0 0" />
+    <parent
+      link="elbow" />
+    <child
+      link="forearm" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.610865"
+      upper="4.79966"
+      effort="150"
+      velocity="10" />
+  </joint>
+  <link
+    name="wrist_roll">
+    <inertial>
+      <origin
+        xyz="0.0133162702793879 1.07124505652201E-06 0.0101986764675338"
+        rpy="0 0 0" />
+      <mass
+        value="0.0105496661961021" />
+      <inertia
+        ixx="5.8411832785237E-06"
+        ixy="-3.95719306189437E-11"
+        ixz="-4.18923021013656E-07"
+        iyy="1.78497795432001E-06"
+        iyz="-4.19748200904185E-11"
+        izz="6.60801283822342E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/wrist_roll.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/wrist_roll.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WR"
+    type="revolute">
+    <origin
+      xyz="-0.0115 0 -0.268"
+      rpy="0 1.5708 0" />
+    <parent
+      link="forearm" />
+    <child
+      link="wrist_roll" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.872665"
+      upper="0.872665"
+      effort="120"
+      velocity="10" />
+  </joint>
+  <link
+    name="wrist_pitch">
+    <inertial>
+      <origin
+        xyz="0.0120455984285805 -0.0180601543333803 -2.07743978686281E-08"
+        rpy="0 0 0" />
+      <mass
+        value="0.0191026585819384" />
+      <inertia
+        ixx="5.71317689571258E-06"
+        ixy="5.18275982834034E-07"
+        ixz="1.11399564208155E-12"
+        iyy="5.58995697610663E-06"
+        iyz="-1.33605078923833E-12"
+        izz="3.01793044419521E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/wrist_pitch.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/wrist_pitch.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WP"
+    type="revolute">
+    <origin
+      xyz="0.025 0 0.0165"
+      rpy="-1.5708 1.5708 0" />
+    <parent
+      link="wrist_roll" />
+    <child
+      link="wrist_pitch" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.39626"
+      upper="1.39626"
+      effort="120"
+      velocity="10" />
+  </joint>
+  <link
+    name="tcp">
+    <inertial>
+      <origin
+        xyz="-0.00855453420608767 2.07743924007797E-08 -0.0159398456666289"
+        rpy="0 0 0" />
+      <mass
+        value="0.0191026585819384" />
+      <inertia
+        ixx="5.71317689571258E-06"
+        ixy="1.11399561194776E-12"
+        ixz="5.18275982834034E-07"
+        iyy="3.01793044419521E-06"
+        iyz="-1.3360507904114E-12"
+        izz="5.58995697610664E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/tcp.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://URDF_ALLEX_RightArm/meshes/tcp.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="tcp"
+    type="fixed">
+    <origin
+      xyz="0.0034911 -0.034 0"
+      rpy="-1.5708 0 3.1416" />
+    <parent
+      link="wrist_pitch" />
+    <child
+      link="tcp" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>
