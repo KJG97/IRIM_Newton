@@ -37,6 +37,11 @@ docker/.container.cfg
 # Project-specific (keep local only; exclude from upstream-contribution fork)
 projects/
 
+# Local / tooling (do not track)
+.cursor/
+dvcc/
+imgui.ini
+
 # Outputs
 **/output/*
 **/outputs/*
