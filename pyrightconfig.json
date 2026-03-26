@@ -11,5 +11,16 @@
   "reportArgumentType": "none",
   "reportAttributeIssue": "none",
   "reportCallIssue": "none",
-  "reportUnknownMemberType": "none"
+  "reportUnknownMemberType": "none",
+  "extraPaths": [
+    "source/isaaclab_experimental",
+    "source/isaaclab_mimic",
+    "source/isaaclab_assets",
+    "source/isaaclab_newton",
+    "source/isaaclab_rl",
+    "source/isaaclab_tasks",
+    "source/isaaclab_tasks_experimental",
+    "source/isaaclab",
+    "projects/allex_newton/source"
+  ]
 }
